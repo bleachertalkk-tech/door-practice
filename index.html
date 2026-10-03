@@ -132,6 +132,7 @@ details.card li b{display:block}
       <summary>The guidelines (what you're going for, not what to say)</summary>
       <ol>
         <li><b>Walk in like a neighbor.</b>Find the owner, say who you are and that you're local, and promise it's quick.</li>
+        <li><b>Give them a reason.</b>One true thing about them (their reviews), then the dead end you found on their site, then "That's actually why I stopped in. Can I ask you two quick things?"</li>
         <li><b>Get them talking.</b>How many jobs a week, and what a normal job is worth. Get their numbers, not yours.</li>
         <li><b>Do the math with their numbers.</b>One lost job a week times 52. Say it slowly, then go quiet.</li>
         <li><b>Show, don't tell.</b>Demo built: "I'm not here to pitch you a website. I'm here to show you what we already built for you." Hand over the phone. No demo: have them pull up their site, or ask where people go when they Google them.</li>
@@ -329,16 +330,23 @@ window.Voice = (function(){
   }
 
   // ---------- The script (SOP section 2) ----------
+  const BRIDGE = {
+    none:'"But when I went to click through, there\'s no website. So people who find you that way kind of just hit a dead end."',
+    broken:'"Real quick, can you pull up your website for me?" [Let them find it.] "Yeah... that\'s what people see when they look you up. Most of them just leave."',
+    demo:'"But the site\'s kind of old. It\'s hard to even call you from a phone, so most people just back out."',
+    booksy:'"But when I click through, it\'s just the booking app. People who want to check you out first kind of hit a dead end."',
+    good:'"Your site\'s not bad. But on a phone it\'s hard to find your number fast, so some people just back out."'
+  };
   const DEMO = "I'm not here to pitch you a website. I'm here to show you what we already built for you.";
   const STEPS = [
     {h:'In the door', line:o=>'[If they\'re with a customer, wait.] "Hey, how\'s it going. Are you the owner?"', keys:['owner']},
     {h:'Who you are', line:o=>'"Okay cool. I\'m Addissu, I live right up the street on Alden. I\'ll be quick, I promise."', keys:['alden','street','quick']},
+    {h:'The bridge', line:o=>'"So I looked you guys up before I came in. You\'ve got like ' + round(o.reviews,10) + ' reviews. That\'s really good." [Let them react.] ' + BRIDGE[o.site] + ' [Let them react.] "That\'s actually why I stopped in. Can I ask you two quick things?"', keys:['review','looked','stopped in']},
     {h:'Their volume', line:o=>'"So roughly how many ' + o.volQ + ' in a week?" [React to their number.]', keys:['week']},
     {h:'Their ticket', line:o=>'"And what\'s ' + o.tkN + ', like ballpark?"', keys:['normal','ballpark','average','usually','typical']},
-    {h:'The math', line:o=>'"Okay. So say your website\'s costing you one of those a week. That\'s... what, ' + o.t + ' times fifty-two... that\'s like ' + grand(o.t*52) + ' a year." [Then stop talking.]', keys:['year','52','fifty']},
+    {h:'The math', line:o=>'"Okay. So say that dead end costs you one of those a week. That\'s... what, ' + o.t + ' times fifty-two... that\'s like ' + grand(o.t*52) + ' a year." [Then stop talking.]', keys:['year','52','fifty']},
     {h:'The proof', line:o=> ['demo','good','booksy'].includes(o.site) ? '"' + DEMO + '" [Hand them your phone. Say nothing while they scroll.]'
-        : o.site === 'broken' ? '"Real quick, can you pull up your website for me?" [Let them find it.] "Yeah... that\'s what people see when they look you up."'
-        : '"You\'ve got like ' + round(o.reviews,10) + ' reviews and no website? Where do people go when they Google you?"', keys:null},
+        : '"Let me show you one I built for a ' + o.kind.toLowerCase() + ' like yours." [Hand them your phone. Say nothing while they scroll.]', keys:null},
     {h:'The offer', line:o=>'"So there\'s two ways to do it. You can just buy it. It\'s eight hundred and it\'s yours, but if anything breaks, that\'s on you. Or, what most people do, I just take care of it. It\'s normally seven ninety-nine and one-fifty a month. I\'m doing five ninety-nine and one forty-nine right now. Anything breaks, you want to change a price, you just text me."', keys:['eight hundred','800','599','five ninety','149','one forty']},
     {h:'The ask', line:o=>'"Want me to put it up this week?" [Stop talking. Whoever talks first usually loses.]', keys:['this week','put it up']},
     {h:'Their number', line:o=>'"Cool. What\'s your cell? I\'ll send you everything right now."', keys:['cell','number']},
@@ -370,21 +378,31 @@ window.Voice = (function(){
       {k:'obj', say:o=>"Look, I'm slammed right now.", v:['busy'], tip:o=>'"Totally, I\'ll be quick. Thirty seconds, and if it\'s not worth it I\'m out."', fol:o=>"Thirty seconds."},
       {k:'obj', say:o=>"Are you one of those Google guys? I get those calls every day.", v:['burned','skeptical'], tip:o=>'"No, no. I\'m just a guy from the neighborhood. No calls, no Google stuff."', fol:o=>"Okay. What is it."}
     ],
-    [ // 3 volume
+    [ // 3 bridge
+      {k:'ok', say:o=>"Yeah, we've been here a long time. People like us.", v:['friendly','chatty','cheap']},
+      {k:'ok', say:o=>"Yeah, I know. My nephew was supposed to fix that.", v:['friendly','chatty','busy'], s:['none','broken','demo','booksy']},
+      {k:'ok', say:o=>"Okay. Quick.", v:['busy','rude']},
+      {k:'obj', say:o=>"We don't need a website. Everybody around here knows us.", v:['skeptical','cheap','chatty'], s:['none','booksy'], tip:o=>'"Totally, and that\'s why you have the reviews. Can I still ask you two quick things?"', fol:o=>"...Go ahead."},
+      {k:'obj', say:o=>"My website's fine.", v:['skeptical','burned'], s:['good','demo'], tip:o=>'"Yeah, it\'s not bad at all. Can I ask you two quick things anyway?"', fol:o=>"...Fine."},
+      {k:'obj', say:o=>"So you came in here to tell me my shit's broken?", v:['hostile'], tip:o=>'"No, no. Your reviews are great. That\'s why it bugs me people can\'t get to you. Two quick questions?"', fol:o=>"...Two."},
+      {k:'obj', say:o=>"Okay, and? What are you selling?", v:['skeptical','rude','burned'], tip:o=>'"Nothing yet. Two quick questions, and you tell me if it\'s even worth your time."', fol:o=>"Go."},
+      {k:'end', say:o=>"Yeah, I'm not interested. Thanks.", v:[], never:true, w:1.0, tip:o=>'"All good, appreciate you. I\'m right up on Alden if you ever need anything." [Leave friendly. Never argue.]', fol:o=>"Yeah. Take care.", out:'No'}
+    ],
+    [ // 4 volume
       {k:'obj', say:o=>"None of your damn business.", v:['hostile'], tip:o=>'"Ha, fair. Ballpark, like more than ' + Math.max(2, Math.round(o.j/2)) + '?"', fol:o=>"Yeah. Like " + o.j + ".", reveal:'j'},
       {k:'ok', say:o=>"Uh, maybe " + o.j + "? Depends on the week.", v:['friendly','busy','cheap'], reveal:'j'},
       {k:'ok', say:o=>"Oh, it's been crazy. Probably " + o.j + " this week. Last week was slower.", v:['chatty'], reveal:'j'},
       {k:'obj', say:o=>"Why do you need to know that?", v:['skeptical','rude','burned'], tip:o=>'"Just curious. I\'m trying to figure out if what I built is even worth your time."', fol:o=>"I dunno. " + o.j + ", give or take.", reveal:'j'},
       {k:'obj', say:o=>"Enough.", v:['rude'], tip:o=>'"Ha, fair. Like, more than ' + Math.max(2, Math.round(o.j/2)) + '?"', fol:o=>"Yeah, more. Like " + o.j + ".", reveal:'j'}
     ],
-    [ // 4 ticket
+    [ // 5 ticket
       {k:'obj', say:o=>"What the hell does it matter?", v:['hostile'], tip:o=>'"Because I\'m about to do some quick math that might surprise you. Ballpark?"', fol:o=>o.t + ", roughly. Happy?", reveal:'t'},
       {k:'ok', say:o=>"Depends. Average, like " + o.t + " bucks?", v:['friendly','chatty','busy'], reveal:'t'},
       {k:'ok', say:o=>"Usually around " + o.t + ".", v:['skeptical','cheap','burned'], reveal:'t'},
       {k:'obj', say:o=>"Why, you writing a book?", v:['rude'], tip:o=>'"Ha. No, I\'m just trying to do some quick math for you. Ballpark?"', fol:o=>"Like " + o.t + ".", reveal:'t'},
       {k:'obj', say:o=>"It varies a lot.", v:['skeptical','cheap'], tip:o=>'"Totally. Just a normal one, ballpark?"', fol:o=>"Call it " + o.t + ".", reveal:'t'}
     ],
-    [ // 5 math
+    [ // 6 math
       {k:'obj', say:o=>"That's bullshit. Nobody's losing me customers.", v:['hostile'], tip:o=>'"Maybe not. Even one a month is still like ' + grand(o.t*12) + ' a year. Can I just show you one thing?"', fol:o=>"...Fine. Show me."},
       {k:'end', say:o=>"Yeah, I don't need any of this. I'm good.", v:[], never:true, w:1.2, tip:o=>'"All good, appreciate you. I\'m right up on Alden if you ever need anything." [Leave friendly. Never argue.]', fol:o=>"Yeah. Take care.", out:'No'},
       {k:'ok', say:o=>"Huh. I never thought about it like that.", v:['friendly','chatty']},
@@ -394,7 +412,7 @@ window.Voice = (function(){
       {k:'obj', say:o=>"I get enough business already.", v:['busy','cheap'], tip:o=>'"That\'s good. This is more the people who Google you and end up going somewhere else."', fol:o=>"Hm. Okay."},
       {k:'obj', say:o=>"So what, you're saying my business sucks?", v:['rude'], tip:o=>'"No, not at all. You\'re clearly doing well. This is just the people who look you up and go somewhere else."', fol:o=>"...Alright."}
     ],
-    [ // 6 proof
+    [ // 7 proof
       {k:'obj', say:o=>"I don't want your damn website.", v:['hostile'], tip:o=>'"All good. Just look at it for ten seconds. If you hate it, I\'m gone."', fol:o=>"...Hm. That's not bad, I guess."},
       {k:'end', say:o=>"Nope. Not interested. Thanks.", v:[], never:true, w:1.2, tip:o=>'"All good, appreciate you. I\'m right up on Alden if you ever need anything." [Leave friendly. Never argue.]', fol:o=>"Yeah. Take care.", out:'No'},
       {k:'obj', say:o=>"Wait, you made this? How'd you get my photos?", v:['friendly','chatty'], s:['demo','good','booksy'], tip:o=>'"Yeah. Pulled them off your Google page. It\'s yours if you want it."', fol:o=>"Huh. That's actually nice."},
@@ -504,7 +522,7 @@ window.Voice = (function(){
     if (!text) return '';
     const t = text.toLowerCase();
     const step = STEPS[cur.i];
-    if (cur.i === 5 && ['demo','good','booksy'].includes(cur.o.site)){
+    if (cur.i === 6 && ['demo','good','booksy'].includes(cur.o.site)){
       const want = DEMO.toLowerCase().replace(/[^a-z' ]/g,'').split(/\s+/);
       const got = new Set(t.replace(/[^a-z' ]/g,'').split(/\s+/));
       const hit = want.filter(w => got.has(w)).length / want.length;
@@ -841,7 +859,7 @@ window.Voice = (function(){
     const prompt = [
       'You are a blunt but encouraging door-to-door sales coach who teaches like Alex Hormozi. Addissu is practicing walking into local businesses in Malden, MA to sell websites. This was a practice conversation with a role-played owner.',
       '',
-      'His guidelines (the 7 beats): 1) walk in like a neighbor, find the owner, promise it is quick; 2) get them talking: jobs a week and what a normal job is worth; 3) do the money math with THEIR numbers (one lost job a week times 52), then go quiet; 4) show, don\'t tell: if a demo exists say word for word "I\'m not here to pitch you a website. I\'m here to show you what we already built for you." and hand over the phone, otherwise have them pull up their site; 5) the offer in plain words: own it for $800 (on you if it breaks) or $599 and $149 a month and he handles everything; 6) ask plainly "Want me to put it up this week?" and stop talking; 7) leave with a yes, a cell number or a time, and ask for a referral.',
+      'His guidelines (the 8 beats): 1) walk in like a neighbor, find the owner, promise it is quick; 2) give a reason before any questions: one true thing about them (their reviews), the dead end he found on their site, then "that\'s actually why I stopped in, can I ask you two quick things?" (jumping straight from the intro into questions is a miss); 3) get them talking: jobs a week and what a normal job is worth; 4) do the money math with THEIR numbers (one lost job a week times 52), then go quiet; 5) show, don\'t tell: if a demo exists say word for word "I\'m not here to pitch you a website. I\'m here to show you what we already built for you." and hand over the phone, otherwise have them pull up their site; 6) the offer in plain words: own it for $800 (on you if it breaks) or $599 and $149 a month and he handles everything; 7) ask plainly "Want me to put it up this week?" and stop talking; 8) leave with a yes, a cell number or a time, and ask for a referral.',
       'Objection rules: agree first, answer in one or two sentences, bring it back to their money, ask again. No jargon. Never argue.',
       '',
       'The owner: ' + o.name + ', ' + o.kind + ', mood ' + CR.VIBES[o.vibe].label + ', ' + o.siteLabel + '. Real numbers: ' + o.j + ' a week, about $' + o.t + ' a job.',
