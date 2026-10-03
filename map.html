@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Door Route</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+:root{--bg:#eef0ec;--card:#fbfcfa;--ink:#1b2420;--muted:#5d6a63;--line:#d3d9d3;--accent:#1f6f54;--soft:#dcebe3;--warn:#a86a08;--warn-soft:#f6ead2;--done:#9aa59f;
+ --display:"Bricolage Grotesque",system-ui,sans-serif;--body:"IBM Plex Sans",system-ui,sans-serif;--mono:"IBM Plex Mono",ui-monospace,monospace}
+@media (prefers-color-scheme:dark){:root{--bg:#121815;--card:#1a221e;--ink:#e6ece8;--muted:#97a59d;--line:#2e3a34;--accent:#5cc49c;--soft:#1f3a2f;--warn:#e0a640;--warn-soft:#3a2f1a;--done:#55615b;color-scheme:dark}}
+*{box-sizing:border-box}[hidden]{display:none!important}
+body{margin:0;background:var(--bg);color:var(--ink);font:400 16px/1.45 var(--body)}
+header{padding:14px 16px 8px;display:grid;gap:4px}
+h1{font:700 1.5rem/1.1 var(--display);margin:0}
+.sub{color:var(--muted);font-size:.9rem}
+#map{height:52vh;min-height:300px;border-block:1px solid var(--line)}
+.wrap{padding:12px 16px 40px;display:grid;gap:12px;max-width:720px;margin:0 auto}
+.legs{display:flex;flex-wrap:wrap;gap:8px}
+.btn{display:inline-flex;align-items:center;min-height:44px;padding:8px 14px;border-radius:10px;background:var(--accent);color:var(--card);font:600 .95rem var(--body);text-decoration:none;border:0;cursor:pointer}
+.btn.ghost{background:transparent;color:var(--ink);border:1px solid var(--line)}
+.prog{font:500 .95rem var(--mono);font-variant-numeric:tabular-nums}
+ol{list-style:none;margin:0;padding:0;display:grid;gap:10px}
+li.stop{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 14px;display:grid;gap:6px}
+li.stop.done{opacity:.55}
+.row{display:flex;gap:10px;align-items:flex-start}
+.num{flex:none;width:30px;height:30px;border-radius:50%;background:var(--accent);color:var(--card);font:600 .9rem/30px var(--mono);text-align:center}
+li.done .num{background:var(--done)}
+.nm{font:600 1.05rem/1.25 var(--body)}
+.ad{color:var(--muted);font-size:.88rem}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{font-size:.78rem;padding:2px 8px;border-radius:999px;background:var(--soft)}
+.chip.no{background:var(--warn-soft)}
+.prob{font-size:.92rem}
+.acts{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.acts label{display:flex;gap:6px;align-items:center;font-size:.92rem;cursor:pointer;min-height:44px}
+.acts input{width:20px;height:20px;accent-color:var(--accent)}
+textarea{width:100%;font:400 .95rem var(--body);border:1px solid var(--line);border-radius:10px;padding:8px;background:var(--bg);color:var(--ink);min-height:40px}
+.pin{background:var(--accent);color:#fff;border:2px solid #fff;border-radius:50%;width:28px;height:28px;font:600 13px/24px var(--mono);text-align:center;box-shadow:0 1px 4px rgba(0,0,0,.4)}
+.pin.done{background:#8a948f}.pin.home{background:#b23a2e;font-size:11px}
+.leaflet-container{font:inherit}
+</style></head><body>
+<header>
+  <h1>Door Route</h1>
+  <div class="sub">20 stops in one loop from 130 Alden St, about 5 miles of walking (roughly 2 hours plus time inside). Numbers are the order to walk them.</div>
+</header>
+<div id="map" role="region" aria-label="Map of the 20 stops"></div>
+<div class="wrap">
+  <div class="prog" id="prog"></div>
+  <div><div class="sub" style="margin-bottom:6px">Open a leg in Google Maps for walking directions:</div><div class="legs" id="legs"></div></div>
+  <ol id="list"></ol>
+  <button class="btn ghost" id="reset">Clear all check marks</button>
+</div>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const HOME = {n:'Home', a:'130 Alden St, Malden, MA 02148', lat:42.42356, lng:-71.04740};
+const S = [{"n": "Neptune Laundromat", "t": "Laundromat", "a": "46 Broadway, Malden, MA 02148", "ph": "(781) 388-0200", "lat": 42.4249464, "lng": -71.0449879, "rev": 394, "demo": false, "p": "Site shows a \"critical error\" page"}, {"n": "Rio Auto Group Corporation", "t": "Car dealer", "a": "77 Broadway, Malden, MA 02148", "ph": "(781) 321-0076", "lat": 42.4257341, "lng": -71.0413875, "rev": 124, "demo": false, "p": "No website at all"}, {"n": "Invictus Barber Club", "t": "Barber", "a": "180 Broadway, Malden, MA 02148", "ph": "", "lat": 42.4292897, "lng": -71.0408292, "rev": 106, "demo": false, "p": "No website at all"}, {"n": "Pawfect Studio Malden", "t": "Pet groomer", "a": "231 Broadway, Malden, MA 02148", "ph": "(781) 388-9986", "lat": 42.431116, "lng": -71.0395013, "rev": 22, "demo": false, "p": "Expired security certificate: phones show a \"not private\" warning"}, {"n": "Logan Automotive Inc", "t": "Body shop", "a": "271 273 Broadway, Malden, MA 02148", "ph": "(617) 569-3529", "lat": 42.4322132, "lng": -71.0388769, "rev": 79, "demo": true, "p": "Emailed Oct 2"}, {"n": "Ken Hodas Insurance", "t": "Insurance", "a": "269 Broadway, Malden, MA 02148", "ph": "(781) 868-4243", "lat": 42.432138, "lng": -71.0392521, "rev": 59, "demo": false, "p": "Site will not load"}, {"n": "Master Team Barbershop", "t": "Barber", "a": "270 Broadway, Malden, MA 02148", "ph": "(781) 655-9109", "lat": 42.4322399, "lng": -71.0398337, "rev": 377, "demo": true, "p": "Only a Booksy page, no site of their own"}, {"n": "Boston Auto Works", "t": "Auto repair", "a": "93 Maplewood St, Malden, MA 02148", "ph": "(781) 500-0553", "lat": 42.4303937, "lng": -71.0458008, "rev": 62, "demo": false, "p": "Site sends visitors to an unrelated \"Access Denied\" page"}, {"n": "WM Body Work", "t": "Body shop", "a": "171 Maplewood St, Malden, MA 02148", "ph": "(617) 381-1817", "lat": 42.4287211, "lng": -71.0454744, "rev": 33, "demo": true, "p": "Emailed Oct 2"}, {"n": "Tony's Autobody Malden", "t": "Body shop", "a": "34 Sharon St, Malden, MA 02148", "ph": "(781) 321-0032", "lat": 42.4289201, "lng": -71.046023, "rev": 48, "demo": true, "p": "No tap-to-call; emailed Oct 2"}, {"n": "Fernandez Style Barber Shop", "t": "Barber", "a": "667 Eastern Ave, Malden, MA 02148", "ph": "(781) 480-4097", "lat": 42.429256, "lng": -71.0508114, "rev": 250, "demo": true, "p": "Only a Booksy page"}, {"n": "Monteiro Beauty Lounge", "t": "Salon", "a": "475 Eastern Ave, Malden, MA 02148", "ph": "(781) 480-4562", "lat": 42.4284765, "lng": -71.0559091, "rev": 309, "demo": false, "p": "Domain expired: shows a GoDaddy parking page"}, {"n": "PS Jewelry", "t": "Jeweler", "a": "471 Eastern Ave, Malden, MA 02148", "ph": "(857) 400-6393", "lat": 42.4284486, "lng": -71.0559446, "rev": 286, "demo": false, "p": "No website at all"}, {"n": "Claudia Leite Aesthetic & Med Spa", "t": "Med spa", "a": "10 Holden St Ste 1, Malden, MA 02148", "ph": "(617) 820-1023", "lat": 42.4278494, "lng": -71.0636617, "rev": 20, "demo": false, "p": "Site won't open (security error)"}, {"n": "Tax Depot", "t": "Tax preparer", "a": "10 Holden St, Malden, MA 02148", "ph": "(781) 322-1100", "lat": 42.4279888, "lng": -71.0637895, "rev": 93, "demo": false, "p": "Not built for phones (980px wide)"}, {"n": "D2 Dental Associates", "t": "Dentist", "a": "389 Main St #403, Malden, MA 02148", "ph": "(781) 397-9229", "lat": 42.4260275, "lng": -71.0671341, "rev": 381, "demo": true, "p": "Site is not built for phones"}, {"n": "Dr. Patricia Wu, DMD", "t": "Dentist", "a": "389 Main St #201, Malden, MA 02148", "ph": "(781) 322-0131", "lat": 42.4258863, "lng": -71.0672218, "rev": 95, "demo": true, "p": "Website domain no longer exists"}, {"n": "Malden Cosmetic Dentistry & Implants", "t": "Dentist", "a": "290 Ferry St, Malden, MA 02148", "ph": "(781) 480-4274", "lat": 42.4228105, "lng": -71.0609601, "rev": 241, "demo": true, "p": "Not emailed yet"}, {"n": "Ferry Street Services Station", "t": "Auto repair", "a": "464 Ferry St, Everett, MA 02149", "ph": "(617) 771-1009", "lat": 42.418335, "lng": -71.0516293, "rev": 712, "demo": false, "p": "No website, with 712 reviews"}, {"n": "Everett Dental Wellness", "t": "Dentist", "a": "826 Broadway, Everett, MA 02149", "ph": "(617) 453-4670", "lat": 42.4182439, "lng": -71.0459564, "rev": 226, "demo": true, "p": "Site takes 7 seconds on a phone"}];
+const store = {get(k,d){try{const v=localStorage.getItem(k);return v?JSON.parse(v):d}catch(e){return d}}, set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
+let done = store.get('route.done', {}), notes = store.get('route.notes', {});
+const enc = s => encodeURIComponent(s);
+const gdir = (from, to, via) => 'https://www.google.com/maps/dir/?api=1&travelmode=walking&origin=' + enc(from) + '&destination=' + enc(to) + (via && via.length ? '&waypoints=' + enc(via.join('|')) : '');
+
+const map = L.map('map', {scrollWheelZoom:false});
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:19, attribution:'&copy; OpenStreetMap contributors'}).addTo(map);
+const pts = [[HOME.lat,HOME.lng]].concat(S.map(s=>[s.lat,s.lng])).concat([[HOME.lat,HOME.lng]]);
+L.polyline(pts, {color:'#1f6f54', weight:3, opacity:.7, dashArray:'6 6'}).addTo(map);
+const icon = (t, cls) => L.divIcon({className:'', html:'<div class="pin ' + cls + '">' + t + '</div>', iconSize:[28,28], iconAnchor:[14,14]});
+L.marker([HOME.lat,HOME.lng], {icon:icon('H','home')}).addTo(map).bindPopup('<b>Start: 130 Alden St</b>');
+const markers = S.map((s,i) => L.marker([s.lat,s.lng], {icon:icon(i+1, done[i]?'done':'')}).addTo(map)
+  .bindPopup('<b>' + (i+1) + '. ' + s.n + '</b><br>' + s.a + '<br>' + s.p + '<br><a href="' + gdir('My Location', s.a) + '" target="_blank" rel="noopener">Walk here</a>')
+  .on('click', () => { const el = document.getElementById('s'+i); if (el) el.scrollIntoView({behavior:'smooth', block:'center'}); }));
+map.fitBounds(L.latLngBounds(pts), {padding:[24,24]});
+
+// Legs of 4 stops so Google Maps on a phone accepts every link (3 stops in between at most).
+const legs = []; let from = HOME.a;
+for (let i = 0; i < S.length; i += 4){
+  const grp = S.slice(i, i+4);
+  legs.push({label:'Stops ' + (i+1) + '–' + (i+grp.length), url:gdir(from, grp[grp.length-1].a, grp.slice(0,-1).map(s=>s.a))});
+  from = grp[grp.length-1].a;
+}
+legs.push({label:'Back home', url:gdir(from, HOME.a)});
+document.getElementById('legs').innerHTML = legs.map(l => '<a class="btn ghost" target="_blank" rel="noopener" href="' + l.url + '">' + l.label + '</a>').join('');
+
+function esc(t){ return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'); }
+function render(){
+  document.getElementById('list').innerHTML = S.map((s,i) => '<li class="stop' + (done[i]?' done':'') + '" id="s' + i + '">' +
+    '<div class="row"><span class="num">' + (i+1) + '</span><div><div class="nm">' + esc(s.n) + '</div><div class="ad">' + esc(s.a) + (s.ph ? ' · ' + esc(s.ph) : '') + '</div></div></div>' +
+    '<div class="chips"><span class="chip">' + esc(s.t) + '</span>' + (s.rev ? '<span class="chip">' + s.rev + ' reviews</span>' : '') + (s.demo ? '<span class="chip">Demo built: show it</span>' : '<span class="chip no">No demo: have them pull up their site</span>') + '</div>' +
+    '<div class="prob"><b>Problem:</b> ' + esc(s.p) + '</div>' +
+    '<div class="acts"><a class="btn" target="_blank" rel="noopener" href="' + gdir('My Location', s.a) + '">Walk here</a>' +
+    '<label for="d' + i + '"><input type="checkbox" id="d' + i + '" data-i="' + i + '"' + (done[i]?' checked':'') + '> Done</label></div>' +
+    '<textarea id="n' + i + '" data-i="' + i + '" placeholder="Who you talked to, what they said, next step" aria-label="Notes for ' + esc(s.n) + '">' + esc(notes[i]||'') + '</textarea></li>').join('');
+  const c = Object.values(done).filter(Boolean).length;
+  document.getElementById('prog').textContent = c + ' of ' + S.length + ' doors done';
+  markers.forEach((m,i) => m.setIcon(icon(i+1, done[i]?'done':'')));
+}
+document.getElementById('list').addEventListener('change', e => { if (e.target.type === 'checkbox'){ done[e.target.dataset.i] = e.target.checked; store.set('route.done', done); render(); } });
+document.getElementById('list').addEventListener('input', e => { if (e.target.tagName === 'TEXTAREA'){ notes[e.target.dataset.i] = e.target.value; store.set('route.notes', notes); } });
+document.getElementById('reset').addEventListener('click', () => { done = {}; store.set('route.done', done); render(); });
+render();
+</script>
+</body></html>
