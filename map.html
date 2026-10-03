@@ -22,6 +22,7 @@ h1{font:700 1.5rem/1.1 var(--display);margin:0}
 ol{list-style:none;margin:0;padding:0;display:grid;gap:10px}
 li.stop{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 14px;display:grid;gap:6px}
 li.stop.done{opacity:.55}
+.when{font:600 .9rem var(--mono);color:var(--accent)}
 .row{display:flex;gap:10px;align-items:flex-start}
 .num{flex:none;width:30px;height:30px;border-radius:50%;background:var(--accent);color:var(--card);font:600 .9rem/30px var(--mono);text-align:center}
 li.done .num{background:var(--done)}
@@ -36,12 +37,13 @@ li.done .num{background:var(--done)}
 .acts input{width:20px;height:20px;accent-color:var(--accent)}
 textarea{width:100%;font:400 .95rem var(--body);border:1px solid var(--line);border-radius:10px;padding:8px;background:var(--bg);color:var(--ink);min-height:40px}
 .pin{background:var(--accent);color:#fff;border:2px solid #fff;border-radius:50%;width:28px;height:28px;font:600 13px/24px var(--mono);text-align:center;box-shadow:0 1px 4px rgba(0,0,0,.4)}
-.pin.done{background:#8a948f}.pin.home{background:#b23a2e;font-size:11px}
+.pin.done{background:#8a948f}.pin.off{background:#c9cfca;color:#555}.pin.home{background:#b23a2e;font-size:11px}
 .leaflet-container{font:inherit}
 </style></head><body>
 <header>
   <h1>Door Route</h1>
-  <div class="sub">20 stops in one loop from 130 Alden St, about 5 miles of walking (roughly 2 hours plus time inside). Numbers are the order to walk them.</div>
+  <div class="sub" id="sub"></div>
+  <div class="legs" role="tablist"><button class="btn" id="m-today" role="tab">Open now, before 6 PM</button><button class="btn ghost" id="m-all" role="tab">All 20</button></div>
 </header>
 <div id="map" role="region" aria-label="Map of the 20 stops"></div>
 <div class="wrap">
@@ -53,7 +55,8 @@ textarea{width:100%;font:400 .95rem var(--body);border:1px solid var(--line);bor
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
 const HOME = {n:'Home', a:'130 Alden St, Malden, MA 02148', lat:42.42356, lng:-71.04740};
-const S = [{"n": "Neptune Laundromat", "t": "Laundromat", "a": "46 Broadway, Malden, MA 02148", "ph": "(781) 388-0200", "lat": 42.4249464, "lng": -71.0449879, "rev": 394, "demo": false, "p": "Site shows a \"critical error\" page"}, {"n": "Rio Auto Group Corporation", "t": "Car dealer", "a": "77 Broadway, Malden, MA 02148", "ph": "(781) 321-0076", "lat": 42.4257341, "lng": -71.0413875, "rev": 124, "demo": false, "p": "No website at all"}, {"n": "Invictus Barber Club", "t": "Barber", "a": "180 Broadway, Malden, MA 02148", "ph": "", "lat": 42.4292897, "lng": -71.0408292, "rev": 106, "demo": false, "p": "No website at all"}, {"n": "Pawfect Studio Malden", "t": "Pet groomer", "a": "231 Broadway, Malden, MA 02148", "ph": "(781) 388-9986", "lat": 42.431116, "lng": -71.0395013, "rev": 22, "demo": false, "p": "Expired security certificate: phones show a \"not private\" warning"}, {"n": "Logan Automotive Inc", "t": "Body shop", "a": "271 273 Broadway, Malden, MA 02148", "ph": "(617) 569-3529", "lat": 42.4322132, "lng": -71.0388769, "rev": 79, "demo": true, "p": "Emailed Oct 2"}, {"n": "Ken Hodas Insurance", "t": "Insurance", "a": "269 Broadway, Malden, MA 02148", "ph": "(781) 868-4243", "lat": 42.432138, "lng": -71.0392521, "rev": 59, "demo": false, "p": "Site will not load"}, {"n": "Master Team Barbershop", "t": "Barber", "a": "270 Broadway, Malden, MA 02148", "ph": "(781) 655-9109", "lat": 42.4322399, "lng": -71.0398337, "rev": 377, "demo": true, "p": "Only a Booksy page, no site of their own"}, {"n": "Boston Auto Works", "t": "Auto repair", "a": "93 Maplewood St, Malden, MA 02148", "ph": "(781) 500-0553", "lat": 42.4303937, "lng": -71.0458008, "rev": 62, "demo": false, "p": "Site sends visitors to an unrelated \"Access Denied\" page"}, {"n": "WM Body Work", "t": "Body shop", "a": "171 Maplewood St, Malden, MA 02148", "ph": "(617) 381-1817", "lat": 42.4287211, "lng": -71.0454744, "rev": 33, "demo": true, "p": "Emailed Oct 2"}, {"n": "Tony's Autobody Malden", "t": "Body shop", "a": "34 Sharon St, Malden, MA 02148", "ph": "(781) 321-0032", "lat": 42.4289201, "lng": -71.046023, "rev": 48, "demo": true, "p": "No tap-to-call; emailed Oct 2"}, {"n": "Fernandez Style Barber Shop", "t": "Barber", "a": "667 Eastern Ave, Malden, MA 02148", "ph": "(781) 480-4097", "lat": 42.429256, "lng": -71.0508114, "rev": 250, "demo": true, "p": "Only a Booksy page"}, {"n": "Monteiro Beauty Lounge", "t": "Salon", "a": "475 Eastern Ave, Malden, MA 02148", "ph": "(781) 480-4562", "lat": 42.4284765, "lng": -71.0559091, "rev": 309, "demo": false, "p": "Domain expired: shows a GoDaddy parking page"}, {"n": "PS Jewelry", "t": "Jeweler", "a": "471 Eastern Ave, Malden, MA 02148", "ph": "(857) 400-6393", "lat": 42.4284486, "lng": -71.0559446, "rev": 286, "demo": false, "p": "No website at all"}, {"n": "Claudia Leite Aesthetic & Med Spa", "t": "Med spa", "a": "10 Holden St Ste 1, Malden, MA 02148", "ph": "(617) 820-1023", "lat": 42.4278494, "lng": -71.0636617, "rev": 20, "demo": false, "p": "Site won't open (security error)"}, {"n": "Tax Depot", "t": "Tax preparer", "a": "10 Holden St, Malden, MA 02148", "ph": "(781) 322-1100", "lat": 42.4279888, "lng": -71.0637895, "rev": 93, "demo": false, "p": "Not built for phones (980px wide)"}, {"n": "D2 Dental Associates", "t": "Dentist", "a": "389 Main St #403, Malden, MA 02148", "ph": "(781) 397-9229", "lat": 42.4260275, "lng": -71.0671341, "rev": 381, "demo": true, "p": "Site is not built for phones"}, {"n": "Dr. Patricia Wu, DMD", "t": "Dentist", "a": "389 Main St #201, Malden, MA 02148", "ph": "(781) 322-0131", "lat": 42.4258863, "lng": -71.0672218, "rev": 95, "demo": true, "p": "Website domain no longer exists"}, {"n": "Malden Cosmetic Dentistry & Implants", "t": "Dentist", "a": "290 Ferry St, Malden, MA 02148", "ph": "(781) 480-4274", "lat": 42.4228105, "lng": -71.0609601, "rev": 241, "demo": true, "p": "Not emailed yet"}, {"n": "Ferry Street Services Station", "t": "Auto repair", "a": "464 Ferry St, Everett, MA 02149", "ph": "(617) 771-1009", "lat": 42.418335, "lng": -71.0516293, "rev": 712, "demo": false, "p": "No website, with 712 reviews"}, {"n": "Everett Dental Wellness", "t": "Dentist", "a": "826 Broadway, Everett, MA 02149", "ph": "(617) 453-4670", "lat": 42.4182439, "lng": -71.0459564, "rev": 226, "demo": true, "p": "Site takes 7 seconds on a phone"}];
+const S = [{"n": "Neptune Laundromat", "t": "Laundromat", "a": "46 Broadway, Malden, MA 02148", "ph": "(781) 388-0200", "lat": 42.4249464, "lng": -71.0449879, "rev": 394, "demo": false, "p": "Site shows a \"critical error\" page", "h": "5:30 AM to 10 PM", "url": null}, {"n": "Rio Auto Group Corporation", "t": "Car dealer", "a": "77 Broadway, Malden, MA 02148", "ph": "(781) 321-0076", "lat": 42.4257341, "lng": -71.0413875, "rev": 124, "demo": false, "p": "No website at all", "h": "10 AM to 5 PM", "url": null}, {"n": "Invictus Barber Club", "t": "Barber", "a": "180 Broadway, Malden, MA 02148", "ph": "", "lat": 42.4292897, "lng": -71.0408292, "rev": 106, "demo": false, "p": "No website at all", "h": "Hours not listed", "url": null}, {"n": "Pawfect Studio Malden", "t": "Pet groomer", "a": "231 Broadway, Malden, MA 02148", "ph": "(781) 388-9986", "lat": 42.431116, "lng": -71.0395013, "rev": 22, "demo": false, "p": "Expired security certificate: phones show a \"not private\" warning", "h": "7 AM to 5 PM", "url": null}, {"n": "Logan Automotive Inc", "t": "Body shop", "a": "271 273 Broadway, Malden, MA 02148", "ph": "(617) 569-3529", "lat": 42.4322132, "lng": -71.0388769, "rev": 79, "demo": true, "p": "Emailed Oct 2", "h": "8:30 AM to 1 PM", "url": "https://malden-previews.netlify.app/logan-automotive-inc/"}, {"n": "Ken Hodas Insurance", "t": "Insurance", "a": "269 Broadway, Malden, MA 02148", "ph": "(781) 868-4243", "lat": 42.432138, "lng": -71.0392521, "rev": 59, "demo": false, "p": "Site will not load", "h": "Closed", "url": null}, {"n": "Master Team Barbershop", "t": "Barber", "a": "270 Broadway, Malden, MA 02148", "ph": "(781) 655-9109", "lat": 42.4322399, "lng": -71.0398337, "rev": 377, "demo": true, "p": "Only a Booksy page, no site of their own", "h": "8 AM to 8 PM", "url": "https://malden-previews.netlify.app/master-team-barbershop/"}, {"n": "Boston Auto Works", "t": "Auto repair", "a": "93 Maplewood St, Malden, MA 02148", "ph": "(781) 500-0553", "lat": 42.4303937, "lng": -71.0458008, "rev": 62, "demo": false, "p": "Site sends visitors to an unrelated \"Access Denied\" page", "h": "8 AM to 3 PM", "url": null}, {"n": "WM Body Work", "t": "Body shop", "a": "171 Maplewood St, Malden, MA 02148", "ph": "(617) 381-1817", "lat": 42.4287211, "lng": -71.0454744, "rev": 33, "demo": true, "p": "Emailed Oct 2", "h": "Closed", "url": "https://malden-previews.netlify.app/wm-body-work/"}, {"n": "Tony's Autobody Malden", "t": "Body shop", "a": "34 Sharon St, Malden, MA 02148", "ph": "(781) 321-0032", "lat": 42.4289201, "lng": -71.046023, "rev": 48, "demo": true, "p": "No tap-to-call; emailed Oct 2", "h": "Closed", "url": "https://malden-previews.netlify.app/tony-s-autobody-malden/"}, {"n": "Fernandez Style Barber Shop", "t": "Barber", "a": "667 Eastern Ave, Malden, MA 02148", "ph": "(781) 480-4097", "lat": 42.429256, "lng": -71.0508114, "rev": 250, "demo": true, "p": "Only a Booksy page", "h": "9 AM to 9 PM", "url": "https://malden-previews.netlify.app/fernandez-style-barber-shop/"}, {"n": "Monteiro Beauty Lounge", "t": "Salon", "a": "475 Eastern Ave, Malden, MA 02148", "ph": "(781) 480-4562", "lat": 42.4284765, "lng": -71.0559091, "rev": 309, "demo": false, "p": "Domain expired: shows a GoDaddy parking page", "h": "9 AM to 6 PM", "url": null}, {"n": "PS Jewelry", "t": "Jeweler", "a": "471 Eastern Ave, Malden, MA 02148", "ph": "(857) 400-6393", "lat": 42.4284486, "lng": -71.0559446, "rev": 286, "demo": false, "p": "No website at all", "h": "10 AM to 4 PM", "url": null}, {"n": "Claudia Leite Aesthetic & Med Spa", "t": "Med spa", "a": "10 Holden St Ste 1, Malden, MA 02148", "ph": "(617) 820-1023", "lat": 42.4278494, "lng": -71.0636617, "rev": 20, "demo": false, "p": "Site won't open (security error)", "h": "9 AM to 2 PM", "url": null}, {"n": "Tax Depot", "t": "Tax preparer", "a": "10 Holden St, Malden, MA 02148", "ph": "(781) 322-1100", "lat": 42.4279888, "lng": -71.0637895, "rev": 93, "demo": false, "p": "Not built for phones (980px wide)", "h": "Hours not listed", "url": null}, {"n": "D2 Dental Associates", "t": "Dentist", "a": "389 Main St #403, Malden, MA 02148", "ph": "(781) 397-9229", "lat": 42.4260275, "lng": -71.0671341, "rev": 381, "demo": true, "p": "Site is not built for phones", "h": "8 AM to 2 PM", "url": "https://malden-previews.netlify.app/d2-dental-associates/"}, {"n": "Dr. Patricia Wu, DMD", "t": "Dentist", "a": "389 Main St #201, Malden, MA 02148", "ph": "(781) 322-0131", "lat": 42.4258863, "lng": -71.0672218, "rev": 95, "demo": true, "p": "Website domain no longer exists", "h": "8 AM to 5 PM", "url": "https://malden-previews.netlify.app/dr-patricia-wu-dmd/"}, {"n": "Malden Cosmetic Dentistry & Implants", "t": "Dentist", "a": "290 Ferry St, Malden, MA 02148", "ph": "(781) 480-4274", "lat": 42.4228105, "lng": -71.0609601, "rev": 241, "demo": true, "p": "Not emailed yet", "h": "9 AM to 3 PM", "url": "https://malden-previews.netlify.app/malden-cosmetic-dentistry-and-implants/"}, {"n": "Ferry Street Services Station", "t": "Auto repair", "a": "464 Ferry St, Everett, MA 02149", "ph": "(617) 771-1009", "lat": 42.418335, "lng": -71.0516293, "rev": 712, "demo": false, "p": "No website, with 712 reviews", "h": "8 AM to 2 PM", "url": null}, {"n": "Everett Dental Wellness", "t": "Dentist", "a": "826 Broadway, Everett, MA 02149", "ph": "(617) 453-4670", "lat": 42.4182439, "lng": -71.0459564, "rev": 226, "demo": true, "p": "Site takes 7 seconds on a phone", "h": "Closed", "url": "https://malden-previews.netlify.app/everett-dental-wellness/"}];
+const TODAY = [[0, "3:34"], [1, "3:47"], [2, "4:01"], [3, "4:13"], [6, "4:23"], [10, "4:46"], [11, "5:01"], [14, "5:20"]];   // [stop index, arrive by] for Saturday Oct 3, leaving around 3:30
 const store = {get(k,d){try{const v=localStorage.getItem(k);return v?JSON.parse(v):d}catch(e){return d}}, set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
 let done = store.get('route.done', {}), notes = store.get('route.notes', {});
 const enc = s => encodeURIComponent(s);
@@ -61,38 +64,54 @@ const gdir = (from, to, via) => 'https://www.google.com/maps/dir/?api=1&travelmo
 
 const map = L.map('map', {scrollWheelZoom:false});
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:19, attribution:'&copy; OpenStreetMap contributors'}).addTo(map);
-const pts = [[HOME.lat,HOME.lng]].concat(S.map(s=>[s.lat,s.lng])).concat([[HOME.lat,HOME.lng]]);
-L.polyline(pts, {color:'#1f6f54', weight:3, opacity:.7, dashArray:'6 6'}).addTo(map);
+let mode = store.get('route.mode', 'today');
+const SUBS = {today:'Saturday: the stops still open, in the order that beats each closing time. Times are when you should get there if you leave home around 3:30. Hours are from Google and can be wrong.',
+              all:'All 20 stops in one loop from 130 Alden St, about 5 miles of walking. Check the hours on each card before you go.'};
+let line = null, markers = [];
 const icon = (t, cls) => L.divIcon({className:'', html:'<div class="pin ' + cls + '">' + t + '</div>', iconSize:[28,28], iconAnchor:[14,14]});
 L.marker([HOME.lat,HOME.lng], {icon:icon('H','home')}).addTo(map).bindPopup('<b>Start: 130 Alden St</b>');
-const markers = S.map((s,i) => L.marker([s.lat,s.lng], {icon:icon(i+1, done[i]?'done':'')}).addTo(map)
-  .bindPopup('<b>' + (i+1) + '. ' + s.n + '</b><br>' + s.a + '<br>' + s.p + '<br><a href="' + gdir('My Location', s.a) + '" target="_blank" rel="noopener">Walk here</a>')
-  .on('click', () => { const el = document.getElementById('s'+i); if (el) el.scrollIntoView({behavior:'smooth', block:'center'}); }));
-map.fitBounds(L.latLngBounds(pts), {padding:[24,24]});
-
-// Legs of 4 stops so Google Maps on a phone accepts every link (3 stops in between at most).
-const legs = []; let from = HOME.a;
-for (let i = 0; i < S.length; i += 4){
-  const grp = S.slice(i, i+4);
-  legs.push({label:'Stops ' + (i+1) + '–' + (i+grp.length), url:gdir(from, grp[grp.length-1].a, grp.slice(0,-1).map(s=>s.a))});
-  from = grp[grp.length-1].a;
-}
-legs.push({label:'Back home', url:gdir(from, HOME.a)});
-document.getElementById('legs').innerHTML = legs.map(l => '<a class="btn ghost" target="_blank" rel="noopener" href="' + l.url + '">' + l.label + '</a>').join('');
-
+function seq(){ return mode === 'today' ? TODAY.map(x => ({i:x[0], when:x[1]})) : S.map((s,i) => ({i, when:null})); }
 function esc(t){ return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'); }
+function drawMap(){
+  if (line) line.remove(); markers.forEach(m => m.remove()); markers = [];
+  const q = seq(), pts = [[HOME.lat,HOME.lng]].concat(q.map(x => [S[x.i].lat,S[x.i].lng])).concat(mode === 'all' ? [[HOME.lat,HOME.lng]] : []);
+  line = L.polyline(pts, {color:'#1f6f54', weight:3, opacity:.7, dashArray:'6 6'}).addTo(map);
+  q.forEach((x,k) => { const s = S[x.i];
+    markers.push(L.marker([s.lat,s.lng], {icon:icon(k+1, done[x.i]?'done':'')}).addTo(map)
+      .bindPopup('<b>' + (k+1) + '. ' + esc(s.n) + '</b><br>' + esc(s.a) + '<br>Saturday: ' + esc(s.h) + '<br><a href="' + gdir('My Location', s.a) + '" target="_blank" rel="noopener">Walk here</a>')
+      .on('click', () => { const el = document.getElementById('s'+x.i); if (el) el.scrollIntoView({behavior:'smooth', block:'center'}); })); });
+  map.fitBounds(L.latLngBounds(pts), {padding:[24,24]});
+  // Legs of 4 stops so Google Maps on a phone accepts every link.
+  const legs = []; let from = HOME.a;
+  for (let k = 0; k < q.length; k += 4){
+    const grp = q.slice(k, k+4).map(x => S[x.i]);
+    legs.push({label:'Stops ' + (k+1) + '–' + (k+grp.length), url:gdir(from, grp[grp.length-1].a, grp.slice(0,-1).map(s=>s.a))});
+    from = grp[grp.length-1].a;
+  }
+  legs.push({label:'Back home', url:gdir(from, HOME.a)});
+  document.getElementById('legs').innerHTML = legs.map(l => '<a class="btn ghost" target="_blank" rel="noopener" href="' + l.url + '">' + l.label + '</a>').join('');
+}
 function render(){
-  document.getElementById('list').innerHTML = S.map((s,i) => '<li class="stop' + (done[i]?' done':'') + '" id="s' + i + '">' +
-    '<div class="row"><span class="num">' + (i+1) + '</span><div><div class="nm">' + esc(s.n) + '</div><div class="ad">' + esc(s.a) + (s.ph ? ' · ' + esc(s.ph) : '') + '</div></div></div>' +
-    '<div class="chips"><span class="chip">' + esc(s.t) + '</span>' + (s.rev ? '<span class="chip">' + s.rev + ' reviews</span>' : '') + (s.demo ? '<span class="chip">Demo built: show it</span>' : '<span class="chip no">No demo: have them pull up their site</span>') + '</div>' +
+  document.getElementById('sub').textContent = SUBS[mode];
+  document.getElementById('m-today').className = 'btn' + (mode === 'today' ? '' : ' ghost');
+  document.getElementById('m-all').className = 'btn' + (mode === 'all' ? '' : ' ghost');
+  const q = seq();
+  document.getElementById('list').innerHTML = q.map((x,k) => { const s = S[x.i], i = x.i; return '<li class="stop' + (done[i]?' done':'') + '" id="s' + i + '">' +
+    '<div class="row"><span class="num">' + (k+1) + '</span><div><div class="nm">' + esc(s.n) + '</div><div class="ad">' + esc(s.a) + (s.ph ? ' · ' + esc(s.ph) : '') + '</div>' +
+    (x.when ? '<div class="when">Get there by ' + x.when + '</div>' : '') + '</div></div>' +
+    '<div class="chips"><span class="chip' + (/Closed/.test(s.h) ? ' no' : '') + '">Sat: ' + esc(s.h) + '</span><span class="chip">' + esc(s.t) + '</span>' + (s.rev ? '<span class="chip">' + s.rev + ' reviews</span>' : '') + (s.demo ? '<span class="chip">Demo built: show it</span>' : '<span class="chip no">No demo: have them pull up their site</span>') + '</div>' +
     '<div class="prob"><b>Problem:</b> ' + esc(s.p) + '</div>' +
     '<div class="acts"><a class="btn" target="_blank" rel="noopener" href="' + gdir('My Location', s.a) + '">Walk here</a>' +
+    (s.url ? '<a class="btn ghost" target="_blank" rel="noopener" href="' + s.url + '">Open their demo</a>' : '') +
     '<label for="d' + i + '"><input type="checkbox" id="d' + i + '" data-i="' + i + '"' + (done[i]?' checked':'') + '> Done</label></div>' +
-    '<textarea id="n' + i + '" data-i="' + i + '" placeholder="Who you talked to, what they said, next step" aria-label="Notes for ' + esc(s.n) + '">' + esc(notes[i]||'') + '</textarea></li>').join('');
-  const c = Object.values(done).filter(Boolean).length;
-  document.getElementById('prog').textContent = c + ' of ' + S.length + ' doors done';
-  markers.forEach((m,i) => m.setIcon(icon(i+1, done[i]?'done':'')));
+    '<textarea id="n' + i + '" data-i="' + i + '" placeholder="Who you talked to, what they said, next step" aria-label="Notes for ' + esc(s.n) + '">' + esc(notes[i]||'') + '</textarea></li>'; }).join('');
+  const c = q.filter(x => done[x.i]).length;
+  document.getElementById('prog').textContent = c + ' of ' + q.length + ' doors done';
+  drawMap();
 }
+function setMode(m){ mode = m; store.set('route.mode', m); render(); }
+document.getElementById('m-today').addEventListener('click', () => setMode('today'));
+document.getElementById('m-all').addEventListener('click', () => setMode('all'));
 document.getElementById('list').addEventListener('change', e => { if (e.target.type === 'checkbox'){ done[e.target.dataset.i] = e.target.checked; store.set('route.done', done); render(); } });
 document.getElementById('list').addEventListener('input', e => { if (e.target.tagName === 'TEXTAREA'){ notes[e.target.dataset.i] = e.target.value; store.set('route.notes', notes); } });
 document.getElementById('reset').addEventListener('click', () => { done = {}; store.set('route.done', done); render(); });
