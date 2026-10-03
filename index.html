@@ -1,0 +1,842 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Counter Roleplay</title>
+<meta name="description" content="Practice the door script against a random owner every run.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+/* Layout: one column "counter" — owner card on top, conversation in the middle, your cue card pinned under it. */
+:root{
+  --bg:#eef0ec; --card:#fbfcfa; --ink:#1b2420; --muted:#5d6a63; --line:#d3d9d3;
+  --accent:#1f6f54; --accent-soft:#dcebe3; --owner:#e7e2d6; --you:#d8e7f0;
+  --good:#2f7d3a; --warn:#a86a08; --bad:#b23a2e; --warn-soft:#f6ead2; --bad-soft:#f5dcd8;
+  --display:"Bricolage Grotesque", "Avenir Next", system-ui, sans-serif;
+  --body:"IBM Plex Sans", system-ui, -apple-system, sans-serif;
+  --mono:"IBM Plex Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#121815; --card:#1a221e; --ink:#e6ece8; --muted:#97a59d; --line:#2e3a34;
+  --accent:#5cc49c; --accent-soft:#1f3a2f; --owner:#2b2a24; --you:#1f2f3a;
+  --good:#6cc47a; --warn:#e0a640; --bad:#ef7c6e; --warn-soft:#3a2f1a; --bad-soft:#3e2320; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#121815; --card:#1a221e; --ink:#e6ece8; --muted:#97a59d; --line:#2e3a34;
+  --accent:#5cc49c; --accent-soft:#1f3a2f; --owner:#2b2a24; --you:#1f2f3a;
+  --good:#6cc47a; --warn:#e0a640; --bad:#ef7c6e; --warn-soft:#3a2f1a; --bad-soft:#3e2320; color-scheme:dark}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--ink);font:400 16px/1.5 var(--body);padding:0 16px}
+.wrap{max-width:640px;margin:0 auto;padding-block:18px 40px;display:grid;gap:14px}
+h1{font:800 1.6rem/1.1 var(--display);margin:0;text-wrap:balance}
+.top{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.tools{display:flex;gap:8px;flex-wrap:wrap}
+.tog{font:500 .85rem var(--body);border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:999px;padding:6px 12px;cursor:pointer}
+.tog[aria-pressed="true"]{background:var(--accent);color:var(--card);border-color:var(--accent)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 16px}
+.owner{display:grid;gap:8px}
+.owner .who{font:600 1.15rem/1.2 var(--display)}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{font:500 .78rem var(--body);padding:3px 9px;border-radius:999px;background:var(--accent-soft);color:var(--ink)}
+.chip.vibe{background:var(--warn-soft)}
+.chip.site{background:var(--bad-soft)}
+.known{display:flex;gap:18px;flex-wrap:wrap;font-size:.9rem;color:var(--muted)}
+.known b{font:500 1rem var(--mono);color:var(--ink);font-variant-numeric:tabular-nums}
+.convo{display:grid;gap:8px;max-height:46vh;overflow-y:auto;padding:4px 2px;scroll-behavior:smooth}
+.msg{max-width:88%;padding:9px 13px;border-radius:14px;line-height:1.4}
+.msg.owner-m{background:var(--owner);justify-self:start;border-bottom-left-radius:4px}
+.msg.you-m{background:var(--you);justify-self:end;border-bottom-right-radius:4px}
+.msg small{display:block;font-size:.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px}
+.msg.sys{justify-self:center;background:transparent;color:var(--muted);font-size:.85rem;text-align:center;padding:2px 8px}
+.fb{font-size:.82rem;margin-top:4px}
+.fb.ok{color:var(--good)} .fb.miss{color:var(--warn)}
+.cue{display:grid;gap:10px;border:2px solid var(--accent)}
+.cue.obj{border-color:var(--warn)}
+.eyebrow{font:600 .74rem var(--body);text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+.cue h2{font:700 1.2rem/1.2 var(--display);margin:0}
+.line{font-size:1.05rem;padding:10px 12px;border-radius:10px;background:var(--accent-soft)}
+.cue.obj .line{background:var(--warn-soft)}
+.line .do{font-style:italic;color:var(--muted);font-size:.92rem}
+.btns{display:flex;gap:8px;flex-wrap:wrap}
+.btn{font:600 1rem var(--body);border:0;border-radius:12px;padding:12px 16px;cursor:pointer;background:var(--accent);color:var(--card);min-height:46px}
+.btn.ghost{background:transparent;color:var(--ink);border:1px solid var(--line)}
+.btn.mic{flex:1 1 180px}
+.btn.mic.on{background:var(--bad)}
+.btn:focus-visible,.tog:focus-visible,textarea:focus-visible{outline:3px solid var(--warn);outline-offset:2px}
+.rate{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.rate button{font:600 .95rem var(--body);border-radius:10px;padding:10px;cursor:pointer;border:1px solid var(--line);background:var(--card);color:var(--ink)}
+.rate .m{border-color:var(--bad);color:var(--bad)} .rate .s{border-color:var(--warn);color:var(--warn)} .rate .n{border-color:var(--good);color:var(--good)}
+textarea{width:100%;font:400 1rem var(--body);border:1px solid var(--line);border-radius:10px;padding:10px;background:var(--bg);color:var(--ink);resize:vertical;min-height:52px}
+.heard{font-size:.9rem;color:var(--muted);min-height:1.3em}
+.note{font-size:.82rem;color:var(--muted)}
+.score{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:10px}
+.score div{display:grid}
+.score strong{font:700 1.6rem var(--display);font-variant-numeric:tabular-nums}
+.result{font:700 1.3rem/1.2 var(--display)}
+.stepdots{display:flex;gap:4px}
+.stepdots i{flex:1;height:5px;border-radius:3px;background:var(--line)}
+.stepdots i.done{background:var(--accent)} .stepdots i.now{background:var(--warn)}
+.tabs{display:flex;gap:6px;border-bottom:1px solid var(--line)}
+.tabs button{font:600 1rem var(--body);background:none;border:0;border-bottom:3px solid transparent;padding:8px 12px;color:var(--muted);cursor:pointer}
+.tabs button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--accent)}
+.stack{display:grid;gap:14px}
+.mood{display:grid;gap:4px}
+.bar{height:8px;border-radius:4px;background:var(--line);overflow:hidden}
+.bar i{display:block;height:100%;width:30%;background:var(--accent);transition:width .4s ease}
+.msg.thinking{color:var(--muted);font-style:italic}
+.coach{white-space:pre-wrap;line-height:1.55}
+details.card summary{font:600 1rem var(--body);cursor:pointer}
+details.card ol{margin:10px 0 0;padding-left:1.2rem;display:grid;gap:8px}
+details.card li b{display:block}
+@media (prefers-reduced-motion: reduce){.bar i{transition:none}}
+@media (prefers-reduced-motion: reduce){.convo{scroll-behavior:auto}}
+</style>
+
+<div class="wrap">
+  <div class="top">
+    <h1>Counter Roleplay</h1>
+    <div class="tools">
+      <button class="tog" id="t-sound" aria-pressed="true">Owner talks out loud</button>
+    </div>
+  </div>
+  <div class="tabs" role="tablist">
+    <button role="tab" id="tab-live" aria-selected="true" aria-controls="live">Live owner</button>
+    <button role="tab" id="tab-drill" aria-selected="false" aria-controls="drill">Script drill</button>
+  </div>
+
+  <section id="live" class="stack" role="tabpanel" aria-labelledby="tab-live">
+    <div class="card owner">
+      <span class="eyebrow" id="l-door">Live door</span>
+      <div class="who" id="l-who"></div>
+      <div class="chips" id="l-chips"></div>
+      <p class="note" id="l-scene"></p>
+      <div class="mood"><span class="note">How close they are to yes</span><div class="bar"><i id="l-mood"></i></div></div>
+    </div>
+    <div class="convo card" id="l-convo" aria-live="polite"></div>
+    <div class="card cue" id="l-cue">
+      <span class="eyebrow">Your turn. No script, just go</span>
+      <textarea id="l-in" placeholder="Say it: press the dictation key (Fn twice on a Mac, the mic on your phone keyboard), talk as long as you want, then press Enter."></textarea>
+      <div class="btns">
+        <button class="btn" id="l-send">Send</button>
+        <button class="btn mic" id="l-mic" hidden>Tap to talk</button>
+        <button class="btn ghost" id="l-end">End door and coach me</button>
+      </div>
+      <p class="note" id="l-note"></p>
+    </div>
+    <div class="card" id="l-coach" hidden>
+      <span class="eyebrow">Coach</span>
+      <div class="coach" id="l-coach-t"></div>
+      <div class="btns"><button class="btn" id="l-next">Next door: new owner</button></div>
+    </div>
+    <details class="card" id="l-guide">
+      <summary>The guidelines (what you're going for, not what to say)</summary>
+      <ol>
+        <li><b>Walk in like a neighbor.</b>Find the owner, say who you are and that you're local, and promise it's quick.</li>
+        <li><b>Get them talking.</b>How many jobs a week, and what a normal job is worth. Get their numbers, not yours.</li>
+        <li><b>Do the math with their numbers.</b>One lost job a week times 52. Say it slowly, then go quiet.</li>
+        <li><b>Show, don't tell.</b>Demo built: "I'm not here to pitch you a website. I'm here to show you what we already built for you." Hand over the phone. No demo: have them pull up their site, or ask where people go when they Google them.</li>
+        <li><b>The offer, like you're telling a friend.</b>Own it for $800 and it's on you if it breaks, or $599 and $149 a month and you handle everything.</li>
+        <li><b>Ask plainly.</b>"Want me to put it up this week?" Then stop talking.</li>
+        <li><b>Leave with something.</b>A yes, their cell, or a time to come back. Then ask who else you should talk to.</li>
+      </ol>
+      <p class="note">Objections: agree first, answer in a sentence or two, bring it back to their money, ask again. No jargon.</p>
+    </details>
+  </section>
+
+  <section id="drill" class="stack" role="tabpanel" aria-labelledby="tab-drill" hidden>
+    <div class="tools"><button class="tog" id="t-test" aria-pressed="false">Test me (hide lines)</button></div>
+  <div class="card owner" aria-live="polite">
+    <span class="eyebrow" id="door-n">Door 1</span>
+    <div class="who" id="o-who"></div>
+    <div class="chips" id="o-chips"></div>
+    <div class="known">
+      <span>Jobs a week: <b id="k-j">?</b></span>
+      <span>Normal job: <b id="k-t">?</b></span>
+      <span>Lost a year at 1 a week: <b id="k-y">?</b></span>
+    </div>
+    <div class="stepdots" id="dots"></div>
+  </div>
+
+  <div class="convo card" id="convo" aria-live="polite"></div>
+
+  <div class="card cue" id="cue">
+    <span class="eyebrow" id="cue-eye">Your step</span>
+    <h2 id="cue-h"></h2>
+    <div class="line" id="cue-line"></div>
+    <button class="btn ghost" id="peek" hidden>Peek at the line</button>
+    <div class="heard" id="heard"></div>
+    <div class="btns" id="act">
+      <button class="btn mic" id="mic" hidden>Tap to talk</button>
+      <button class="btn ghost" id="said">I said it</button>
+    </div>
+    <textarea id="typed" placeholder="Or type what you'd say, then press I said it" aria-label="Type your answer"></textarea>
+    <div class="rate" id="rate" hidden>
+      <button class="m" data-r="0">Missed</button>
+      <button class="s" data-r="1">Shaky</button>
+      <button class="n" data-r="2">Nailed</button>
+    </div>
+    <p class="note" id="mic-note"></p>
+  </div>
+
+  <div class="card" id="end" hidden>
+    <span class="eyebrow">Door over</span>
+    <p class="result" id="end-r"></p>
+    <p id="end-why"></p>
+    <div class="score">
+      <div><strong id="e-steps">0</strong><span class="note">Steps on script</span></div>
+      <div><strong id="e-n">0</strong><span class="note">Objections nailed</span></div>
+      <div><strong id="e-s">0</strong><span class="note">Shaky</span></div>
+      <div><strong id="e-m">0</strong><span class="note">Missed</span></div>
+    </div>
+    <p class="note" id="totals"></p>
+    <div class="btns"><button class="btn" id="next">Next door: new owner</button></div>
+  </div>
+  </section>
+</div>
+
+<script>
+window.Voice = (function(){
+  const load = (k,d) => { try{ const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; }catch(e){ return d; } };
+  let on = load('rp.voice', true);
+  const NOVELTY = /Albert|Bad News|Bahh|Bells|Boing|Bubbles|Cellos|Good News|Jester|Organ|Superstar|Trinoids|Whisper|Wobble|Zarvox|Grandma|Grandpa|Eddy|Flo|Reed|Rocko|Sandy|Shelley|Junior|Ralph|Kathy|Fred/i;
+  function voices(){ try{ return speechSynthesis.getVoices().filter(v => /^en[-_]US/i.test(v.lang) && !NOVELTY.test(v.name)); }catch(e){ return []; } }
+  try{ speechSynthesis.getVoices(); }catch(e){}
+  function clean(t){ return String(t).replace(/\*[^*]*\*/g, ' ').replace(/\[[^\]]*\]/g, ' ').replace(/\.\.\./g, ', ').trim(); }
+  function stop(){ try{ speechSynthesis.cancel(); }catch(e){} }
+  function speak(text, p){
+    if (!on || !('speechSynthesis' in window)) return;
+    const t = clean(text); if (!t) return;
+    try{
+      stop();
+      const u = new SpeechSynthesisUtterance(t);
+      const vs = voices();
+      if (vs.length) u.voice = vs[Math.floor((p.voice || 0) * vs.length) % vs.length];
+      u.rate = p.rate || 1; u.pitch = p.pitch || 1;
+      speechSynthesis.speak(u);
+    }catch(e){}
+  }
+  function setOn(v){ on = v; try{ localStorage.setItem('rp.voice', JSON.stringify(v)); }catch(e){} if (!v) stop(); }
+  // Tap to start, tap to stop. Keeps listening through pauses until you tap again.
+  function makeMic(btn, h){
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR){ btn.hidden = true; return; }
+    btn.hidden = false;
+    const label = btn.textContent;
+    let rec = null, want = false, committed = '', live = '';
+    function begin(){
+      rec = new SR(); rec.lang = 'en-US'; rec.continuous = true; rec.interimResults = true;
+      rec.onresult = e => { let t = ''; for (let k = 0; k < e.results.length; k++) t += e.results[k][0].transcript; live = t; h.onText((committed + ' ' + live).trim()); };
+      rec.onerror = e => {
+        if (e.error === 'not-allowed' || e.error === 'service-not-allowed' || e.error === 'audio-capture'){
+          want = false; btn.hidden = true;
+          h.note && h.note('The mic is blocked on this page. Use your keyboard\'s dictation instead: Fn twice on a Mac, or the mic key on your phone.');
+        }
+      };
+      rec.onend = () => { committed = (committed + ' ' + live).trim(); live = ''; if (want){ try{ begin(); }catch(e){ want = false; finish(); } } else finish(); };
+      rec.start();
+    }
+    function finish(){ btn.classList.remove('on'); btn.textContent = label; const t = committed; committed = ''; if (t) h.onDone(t); }
+    btn.addEventListener('click', () => {
+      if (!want){
+        stop(); want = true; committed = ''; live = '';
+        btn.classList.add('on'); btn.textContent = 'Listening. Tap when you\'re done';
+        try{ begin(); }catch(e){ want = false; finish(); }
+      } else {
+        want = false; try{ rec.stop(); }catch(e){ finish(); }
+      }
+    });
+  }
+  return {speak, stop, setOn, isOn: () => on, makeMic};
+})();
+</script>
+<script>
+(function(){
+  const $ = id => document.getElementById(id);
+  const store = {
+    get(k,d){ try{ const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; }catch(e){ return d; } },
+    set(k,v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
+  };
+  const R = (a,b) => a + Math.floor(Math.random() * (b - a + 1));
+  const pick = a => a[Math.floor(Math.random() * a.length)];
+  const round = (n, to) => Math.max(to, Math.round(n / to) * to);
+  const money = n => '$' + Math.round(n).toLocaleString('en-US');
+  const grand = n => n >= 1000 ? Math.round(n / 1000) + ' grand' : money(n);
+  const esc = t => String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;');
+  const fmt = t => esc(t).replace(/\[([^\]]+)\]/g, '<span class="do">[$1]</span>');
+
+  // ---------- Random owner ----------
+  const NAMES = ['Tony','Maria','Sal','Dave','Linh','Rosa','Mike','Jen','Paulo','Kevin','Ana','Rich','Deb','Hector','Nick','Tram','Joe','Fatima','Steve','Carla','Marcus','Priya','Vinny','Gloria'];
+  // [kind, shop name pattern, volume question, ticket noun, jobs range, ticket range, search term]
+  const BIZ = [
+    ['Auto body', n => n + "'s Auto Body", 'cars do you guys do', 'a normal job', [4,12], [900,2500], 'body shop'],
+    ['Auto repair', n => 'Malden Auto Care', 'cars come through', 'a normal job', [15,45], [250,700], 'mechanic'],
+    ['Barbershop', n => n + "'s Barbershop", 'cuts do you guys do', 'a normal cut', [60,160], [30,45], 'barber'],
+    ['Hair salon', n => 'Studio ' + n, 'clients do you see', 'a normal appointment', [30,90], [60,150], 'hair salon'],
+    ['Nail salon', n => n + "'s Nails", 'clients do you see', 'a normal appointment', [50,140], [35,70], 'nail salon'],
+    ['Dentist', n => 'Pleasant Street Dental', 'new patients do you guys get', 'a new patient worth', [5,20], [600,1500], 'dentist'],
+    ['Pizza shop', n => n + "'s Pizza", 'orders do you do', 'a normal order', [250,700], [22,35], 'pizza'],
+    ['Laundromat', n => 'Main Street Wash & Fold', 'drop-off orders do you get', 'a normal drop-off', [30,90], [25,45], 'laundromat'],
+    ['Landscaping', n => n + ' Landscaping', 'jobs do you guys do', 'a normal job', [10,30], [150,600], 'landscaper'],
+    ['Cleaning company', n => n + "'s Cleaning", 'cleanings do you guys do', 'a normal cleaning', [10,35], [150,300], 'house cleaner'],
+    ['Plumbing & HVAC', n => n + ' Plumbing & Heating', 'service calls do you run', 'a normal call', [10,30], [300,1200], 'plumber'],
+    ['Tax prep', n => 'Malden Tax Center', 'returns do you do', 'a normal return', [10,60], [150,400], 'tax prep'],
+    ['Pet grooming', n => n + "'s Grooming", 'dogs do you guys do', 'a normal groom', [20,60], [60,110], 'dog groomer'],
+    ['Tattoo shop', n => 'Ferry Street Tattoo', 'pieces do you guys do', 'a normal piece', [10,30], [150,500], 'tattoo shop']
+  ];
+  const VIBES = {
+    friendly:  {label:'Friendly', rate:1.0, pitch:1.05},
+    busy:      {label:'Slammed', rate:1.18, pitch:1.0},
+    skeptical: {label:'Skeptical', rate:0.95, pitch:0.95},
+    rude:      {label:'Rude', rate:1.08, pitch:0.85},
+    chatty:    {label:'Chatty', rate:1.05, pitch:1.1},
+    burned:    {label:'Got burned before', rate:0.95, pitch:0.95},
+    cheap:     {label:'Watches every dollar', rate:1.0, pitch:0.95}
+  };
+  const SITES = [
+    ['demo', 'Bad site, demo built', 4],
+    ['good', 'Decent site, demo built', 2],
+    ['booksy', 'Booking page only, demo built', 1],
+    ['broken', 'Site is broken, no demo', 2],
+    ['none', 'No website, no demo', 2]
+  ];
+  function wpick(list, w){ const tot = list.reduce((s,x)=>s+w(x),0); let r = Math.random()*tot; for (const x of list){ r -= w(x); if (r <= 0) return x; } return list[list.length-1]; }
+  function newOwner(){
+    const name = pick(NAMES), b = pick(BIZ);
+    const s = wpick(SITES, x => x[2]);
+    const vibe = pick(Object.keys(VIBES));
+    let j = R(b[4][0], b[4][1]); j = j > 40 ? round(j,10) : j > 12 ? round(j,5) : j;
+    let t = R(b[5][0], b[5][1]); t = t >= 500 ? round(t,100) : t >= 100 ? round(t,25) : round(t,5);
+    return {name, kind:b[0], shop:b[1](name), volQ:b[2], tkN:b[3], j, t, site:s[0], siteLabel:s[1], vibe, search:b[6],
+            reviews:R(40,600), voice:Math.random(), other:pick(BIZ.filter(x=>x!==b)), otherName:pick(NAMES.filter(x=>x!==name))};
+  }
+
+  // ---------- The script (SOP section 2) ----------
+  const DEMO = "I'm not here to pitch you a website. I'm here to show you what we already built for you.";
+  const STEPS = [
+    {h:'In the door', line:o=>'[If they\'re with a customer, wait.] "Hey, how\'s it going. Are you the owner?"', keys:['owner']},
+    {h:'Who you are', line:o=>'"Okay cool. I\'m Addissu, I live right up the street on Alden. I\'ll be quick, I promise."', keys:['alden','street','quick']},
+    {h:'Their volume', line:o=>'"So roughly how many ' + o.volQ + ' in a week?" [React to their number.]', keys:['week']},
+    {h:'Their ticket', line:o=>'"And what\'s ' + o.tkN + ', like ballpark?"', keys:['normal','ballpark','average','usually','typical']},
+    {h:'The math', line:o=>'"Okay. So say your website\'s costing you one of those a week. That\'s... what, ' + o.t + ' times fifty-two... that\'s like ' + grand(o.t*52) + ' a year." [Then stop talking.]', keys:['year','52','fifty']},
+    {h:'The proof', line:o=> ['demo','good','booksy'].includes(o.site) ? '"' + DEMO + '" [Hand them your phone. Say nothing while they scroll.]'
+        : o.site === 'broken' ? '"Real quick, can you pull up your website for me?" [Let them find it.] "Yeah... that\'s what people see when they look you up."'
+        : '"You\'ve got like ' + round(o.reviews,10) + ' reviews and no website? Where do people go when they Google you?"', keys:null},
+    {h:'The offer', line:o=>'"So there\'s two ways to do it. You can just buy it. It\'s eight hundred and it\'s yours, but if anything breaks, that\'s on you. Or, what most people do, I just take care of it. It\'s normally seven ninety-nine and one-fifty a month. I\'m doing five ninety-nine and one forty-nine right now. Anything breaks, you want to change a price, you just text me."', keys:['eight hundred','800','599','five ninety','149','one forty']},
+    {h:'The ask', line:o=>'"Want me to put it up this week?" [Stop talking. Whoever talks first usually loses.]', keys:['this week','put it up']},
+    {h:'Their number', line:o=>'"Cool. What\'s your cell? I\'ll send you everything right now."', keys:['cell','number']},
+    {h:'Referral', line:o=>'"Appreciate you. Anybody else around here you think I should talk to?"', keys:['anybody','anyone','talk to','around here']}
+  ];
+  const NOT_YET = '"All good. Let me text it to you so you can look at it later. What\'s your number?"';
+
+  // ---------- Owner responses per step ----------
+  // kind: ok = moves on; obj = you must handle it; end = door over after your reply.
+  // v = vibes that make it likelier; s = site states it applies to.
+  const SOFT_END = ["Yeah, I don't think so. Thanks though.", "I'm good, man. Take care.", "Nah. I gotta get back to work."];
+  const RESP = [
+    [ // 1 owner?
+      {k:'ok', say:o=>"Yeah, that's me. What's up?", v:['friendly','chatty','cheap','burned']},
+      {k:'ok', say:o=>"Yeah. Make it quick, I got somebody in five minutes.", v:['busy']},
+      {k:'obj', say:o=>"Who's asking?", v:['skeptical','rude','burned'], tip:o=>'Smile and say who you are: "Oh, sorry. I\'m Addissu, I live right up the street on Alden."', fol:o=>"Okay... yeah, I'm the owner."},
+      {k:'end', say:o=>"No, " + o.name + " isn't in today.", v:[], w:0.6, tip:o=>'Don\'t pitch the employee. Get a time and leave: "Oh okay, when\'s a good time to catch them?"', fol:o=>"Try tomorrow, like ten in the morning.", out:'Follow-up time'},
+      {k:'obj', say:o=>"No solicitors. Didn't you see the sign?", v:['rude'], tip:o=>['demo','good','booksy'].includes(o.site) ? '"Oh my bad, I\'ll go. I actually already built you a website, though. Want me to just text you the link?"' : '"Oh my bad. Ten seconds, I promise, I\'m from the neighborhood."', fol:o=>"...Fine. Quick."}
+    ],
+    [ // 2 who you are
+      {k:'ok', say:o=>"Oh, Alden? My cousin's over there. Okay, what's up?", v:['chatty','friendly']},
+      {k:'ok', say:o=>"Okay. What's this about?", v:['skeptical','busy','cheap','burned']},
+      {k:'ok', say:o=>"Mm-hm.", v:['busy','rude']},
+      {k:'obj', say:o=>"If you're selling something, I'm not buying.", v:['skeptical','rude','cheap'], tip:o=>'"Totally fair. I\'m not even asking you to buy anything. Can I ask you one quick question?"', fol:o=>"...Go ahead."},
+      {k:'obj', say:o=>"Look, I'm slammed right now.", v:['busy'], tip:o=>'"Totally, I\'ll be quick. Thirty seconds, and if it\'s not worth it I\'m out."', fol:o=>"Thirty seconds."},
+      {k:'obj', say:o=>"Are you one of those Google guys? I get those calls every day.", v:['burned','skeptical'], tip:o=>'"No, no. I\'m just a guy from the neighborhood. No calls, no Google stuff."', fol:o=>"Okay. What is it."}
+    ],
+    [ // 3 volume
+      {k:'ok', say:o=>"Uh, maybe " + o.j + "? Depends on the week.", v:['friendly','busy','cheap'], reveal:'j'},
+      {k:'ok', say:o=>"Oh, it's been crazy. Probably " + o.j + " this week. Last week was slower.", v:['chatty'], reveal:'j'},
+      {k:'obj', say:o=>"Why do you need to know that?", v:['skeptical','rude','burned'], tip:o=>'"Just curious. I\'m trying to figure out if what I built is even worth your time."', fol:o=>"I dunno. " + o.j + ", give or take.", reveal:'j'},
+      {k:'obj', say:o=>"Enough.", v:['rude'], tip:o=>'"Ha, fair. Like, more than ' + Math.max(2, Math.round(o.j/2)) + '?"', fol:o=>"Yeah, more. Like " + o.j + ".", reveal:'j'}
+    ],
+    [ // 4 ticket
+      {k:'ok', say:o=>"Depends. Average, like " + o.t + " bucks?", v:['friendly','chatty','busy'], reveal:'t'},
+      {k:'ok', say:o=>"Usually around " + o.t + ".", v:['skeptical','cheap','burned'], reveal:'t'},
+      {k:'obj', say:o=>"Why, you writing a book?", v:['rude'], tip:o=>'"Ha. No, I\'m just trying to do some quick math for you. Ballpark?"', fol:o=>"Like " + o.t + ".", reveal:'t'},
+      {k:'obj', say:o=>"It varies a lot.", v:['skeptical','cheap'], tip:o=>'"Totally. Just a normal one, ballpark?"', fol:o=>"Call it " + o.t + ".", reveal:'t'}
+    ],
+    [ // 5 math
+      {k:'ok', say:o=>"Huh. I never thought about it like that.", v:['friendly','chatty']},
+      {k:'ok', say:o=>"Hm.", v:['busy','skeptical']},
+      {k:'obj', say:o=>"I'm not losing anybody. All my customers are word of mouth.", v:['skeptical','chatty','friendly'], tip:o=>'"Yeah, word of mouth is huge. Where do those people go right after somebody tells them about you?" [Pause.] "They Google you."', fol:o=>"...Yeah, probably."},
+      {k:'obj', say:o=>"That's not how it works. People don't pick off a website.", v:['skeptical','burned'], tip:o=>'"Maybe not all of them. Even one a month is still like ' + grand(o.t*12) + ' a year."', fol:o=>"...I guess."},
+      {k:'obj', say:o=>"I get enough business already.", v:['busy','cheap'], tip:o=>'"That\'s good. This is more the people who Google you and end up going somewhere else."', fol:o=>"Hm. Okay."},
+      {k:'obj', say:o=>"So what, you're saying my business sucks?", v:['rude'], tip:o=>'"No, not at all. You\'re clearly doing well. This is just the people who look you up and go somewhere else."', fol:o=>"...Alright."}
+    ],
+    [ // 6 proof
+      {k:'obj', say:o=>"Wait, you made this? How'd you get my photos?", v:['friendly','chatty'], s:['demo','good','booksy'], tip:o=>'"Yeah. Pulled them off your Google page. It\'s yours if you want it."', fol:o=>"Huh. That's actually nice."},
+      {k:'obj', say:o=>"I already have a website. It's fine.", v:['skeptical','cheap'], s:['good','demo'], w:2, tip:o=>'"Yeah? Pull it up real quick next to this one. Which one would you call from?"', fol:o=>"...Okay, yours is cleaner. I'll give you that."},
+      {k:'obj', say:o=>"Is this AI?", v:['skeptical','burned'], s:['demo','good','booksy'], tip:o=>'"I use AI to build it fast, yeah, everybody does now. I\'m the one keeping it running, though."', fol:o=>"Hm. It looks good though."},
+      {k:'obj', say:o=>"My nephew made my website.", v:['friendly','cheap'], s:['demo','good','broken'], tip:o=>'"Oh nice, keep him. Show him this, see what he thinks."', fol:o=>"Maybe. What's something like this cost?"},
+      {k:'obj', say:o=>"I don't need a website. I've got my booking app.", v:[], s:['booksy'], w:2, tip:o=>'"The booking app\'s great for booking. But when somebody Googles you, that\'s not what shows up first. This is."', fol:o=>"Hm. Okay."},
+      {k:'obj', say:o=>"Huh. It was working last week.", v:[], s:['broken'], w:2, tip:o=>'"Yeah, stuff breaks. That\'s kind of my whole thing, I keep it from breaking."', fol:o=>"Okay. So what do you do?"},
+      {k:'obj', say:o=>"My web guy handles that.", v:['busy','skeptical'], s:['broken'], tip:o=>'"Oh okay. How long has it been like this?" [Let them think about it.]', fol:o=>"...I don't know. A while, I guess."},
+      {k:'obj', say:o=>"I don't need one. Everybody knows where I am.", v:[], s:['none'], w:2, tip:o=>'"Everybody around here, yeah. What about somebody who just moved here and Googles \'' + o.search + ' near me\'?"', fol:o=>"...Maybe."},
+      {k:'obj', say:o=>"I tried a website years ago. Didn't do anything.", v:['burned','cheap'], s:['none','broken'], tip:o=>'"What happened with it?" [Listen.] "Yeah, most of them just sit there. The whole point of mine is it gets you calls."', fol:o=>"Hm."},
+      {k:'ok', say:o=>"Huh. Okay, keep going.", v:['busy','friendly']}
+    ],
+    [ // 7 offer
+      {k:'obj', say:o=>"A hundred forty-nine a month? That's a lot.", v:['cheap','skeptical'], w:2, tip:o=>'"Yeah, I get it. It\'s less than one job, though. One extra customer a month and it\'s paid for."', fol:o=>"...One job, huh."},
+      {k:'obj', say:o=>"I'd rather just pay once and be done.", v:['cheap','busy'], tip:o=>'"You can. It\'s eight hundred and it\'s yours. Just, if it breaks, you\'re calling somebody. With the plan you just text me."', fol:o=>"Okay. I get it."},
+      {k:'obj', say:o=>"Can I cancel whenever?", v:['skeptical','burned'], tip:o=>'Answer with the term you picked, short: "Yeah, it\'s month to month. No contract."', fol:o=>"Okay."},
+      {k:'obj', say:o=>"Why's the monthly one cheaper up front?", v:['skeptical','chatty'], tip:o=>'"Because I\'d rather keep you. I make my money keeping it running."', fol:o=>"Makes sense."},
+      {k:'obj', say:o=>"How do I know you won't just take my money and disappear?", v:['burned','rude'], tip:o=>'"Fair. You see the whole site before you pay anything, and it\'s all in writing. Don\'t like it, you don\'t pay."', fol:o=>"Alright."},
+      {k:'obj', say:o=>"I got burned by a web guy before.", v:['burned'], w:2, tip:o=>'"Ugh, I hear that a lot. What happened?" [Listen.] "That\'s kind of why I do it monthly. If it breaks, it\'s on me."', fol:o=>"...Yeah, he just disappeared on me."},
+      {k:'ok', say:o=>"Okay. That's not bad, actually.", v:['friendly','chatty']}
+    ],
+    [ // 8 ask (follow-up depends on how you rate yourself)
+      {k:'yes', say:o=>"Yeah, alright. Let's do it.", v:['friendly','chatty'], w:0.8},
+      {k:'close', say:o=>"Let me think about it.", v:['skeptical','cheap','busy','burned'], w:2, tip:o=>'"Yeah, for sure. Is it the price or something else?" [Answer that one thing, then ask again.]'},
+      {k:'close', say:o=>"I gotta talk to my partner first.", v:['friendly','skeptical'], tip:o=>'"Makes sense. What do you think they\'ll say?"'},
+      {k:'close', say:o=>"Just send me some info.", v:['busy','rude'], tip:o=>'"Yeah, for sure. What\'s your cell? I\'ll text it right now."'},
+      {k:'close', say:o=>"What if I don't like it after a month?", v:['cheap','burned'], tip:o=>'Answer with your term: "Then you cancel. It\'s month to month." Then ask again.'},
+      {k:'end', say:o=>"Not interested.", v:['rude'], tip:o=>'"All good, appreciate you. I\'m right up on Alden if you ever need anything." [Leave friendly.]', fol:o=>"Yeah. Take care.", out:'No'}
+    ],
+    [ // 9 number
+      {k:'ok', say:o=>"Yeah, it's 781-555-0" + R(100,199) + ".", v:['friendly','chatty','busy','cheap','skeptical','burned']},
+      {k:'obj', say:o=>"Just give me your card.", v:['rude','busy','skeptical'], tip:o=>'"I don\'t have cards yet. What\'s your cell? I\'ll text you so you have mine."', fol:o=>"...Fine. 781-555-0" + R(100,199) + "."}
+    ],
+    [ // 10 referral
+      {k:'ok', say:o=>"Try the " + o.other[0].toLowerCase() + " down the block. Their website's a mess.", v:['friendly','chatty']},
+      {k:'ok', say:o=>"Talk to " + o.otherName + " at the " + o.other[0].toLowerCase() + " next door. Tell them I sent you.", v:['chatty','friendly']},
+      {k:'ok', say:o=>"Nah, not really.", v:['busy','rude','skeptical','cheap','burned']}
+    ]
+  ];
+  function respond(i){
+    const o = cur.o;
+    const list = RESP[i].filter(r => !r.s || r.s.includes(o.site));
+    return wpick(list, r => (r.w || 1) * (r.v.includes(o.vibe) ? 3 : r.v.length ? 0.6 : 1));
+  }
+
+  // ---------- Voice ----------
+  let testMode = store.get('rp.test', false);
+  function speak(text){ const vb = VIBES[cur.o.vibe]; Voice.speak(text, {voice:cur.o.voice, rate:vb.rate, pitch:vb.pitch}); }
+  function micNote(t){ $('mic-note').textContent = t; }
+  Voice.makeMic($('mic'), {onText: t => { $('heard').textContent = '"' + t + '"'; }, onDone: t => submit(t), note: micNote});
+
+  // ---------- Game state ----------
+  let cur, totals = store.get('rp.tot', {doors:0, yes:0, numbers:0, n:0, s:0, m:0});
+  function addMsg(who, text, extra){
+    const d = document.createElement('div');
+    d.className = 'msg ' + (who === 'owner' ? 'owner-m' : who === 'you' ? 'you-m' : 'sys');
+    d.innerHTML = (who === 'owner' ? '<small>' + esc(cur.o.name) + '</small>' : who === 'you' ? '<small>You</small>' : '') + fmt(text) + (extra || '');
+    $('convo').appendChild(d); $('convo').scrollTop = $('convo').scrollHeight;
+    if (who === 'owner' || who === 'you') cur.log.push([who === 'owner' ? cur.o.name : 'Addissu', text.replace(/^"|"$/g, '')]);
+    return d;
+  }
+  function owner(text){ addMsg('owner', '"' + text + '"'); speak(text); }
+
+  function newDoor(){
+    cur = {o:newOwner(), i:0, phase:'step', r:null, hits:0, n:0, s:0, m:0, out:null, log:[], ex:0, objSaid:null};
+    const o = cur.o;
+    $('door-n').textContent = 'Door ' + (totals.doors + 1);
+    $('o-who').textContent = o.name + ' · ' + o.shop;
+    $('o-chips').innerHTML = '<span class="chip">' + esc(o.kind) + '</span><span class="chip vibe">' + VIBES[o.vibe].label + '</span><span class="chip site">' + esc(o.siteLabel) + '</span>' + (o.site === 'none' ? '<span class="chip">' + round(o.reviews,10) + ' reviews</span>' : '');
+    $('k-j').textContent = '?'; $('k-t').textContent = '?'; $('k-y').textContent = '?';
+    $('convo').innerHTML = ''; $('end').hidden = true; $('cue').hidden = false;
+    addMsg('sys', 'You walk into ' + o.shop + '.');
+    showCue();
+  }
+  function dots(){
+    $('dots').innerHTML = STEPS.map((s,k) => '<i class="' + (k < cur.i ? 'done' : k === cur.i ? 'now' : '') + '"></i>').join('');
+  }
+  function showCue(){
+    dots();
+    const step = STEPS[cur.i], cue = $('cue');
+    $('typed').value = ''; $('heard').textContent = '';
+    $('rate').hidden = true; $('act').hidden = false; $('typed').hidden = false;
+    if (cur.phase === 'step'){
+      cue.classList.remove('obj');
+      $('cue-eye').textContent = 'Step ' + (cur.i + 1) + ' of ' + STEPS.length;
+      $('cue-h').textContent = step.h;
+      $('cue-line').innerHTML = fmt(cur.altLine || step.line(cur.o));
+    } else {
+      cue.classList.add('obj');
+      $('cue-eye').textContent = 'Handle it';
+      $('cue-h').textContent = 'They said: ' + (cur.objSaid || cur.r.say(cur.o));
+      $('cue-line').innerHTML = fmt(cur.r.tip(cur.o));
+    }
+    const hide = testMode;
+    $('cue-line').hidden = hide; $('peek').hidden = !hide;
+  }
+  $('peek').addEventListener('click', () => { $('cue-line').hidden = false; $('peek').hidden = true; });
+
+  function check(text){
+    if (!text) return '';
+    const t = text.toLowerCase();
+    const step = STEPS[cur.i];
+    if (cur.i === 5 && ['demo','good','booksy'].includes(cur.o.site)){
+      const want = DEMO.toLowerCase().replace(/[^a-z' ]/g,'').split(/\s+/);
+      const got = new Set(t.replace(/[^a-z' ]/g,'').split(/\s+/));
+      const hit = want.filter(w => got.has(w)).length / want.length;
+      return hit >= 0.85 ? '<div class="fb ok">Demo line: word for word.</div>' : '<div class="fb miss">Demo line was off. Say it exactly: "' + esc(DEMO) + '"</div>';
+    }
+    if (!step.keys) return '';
+    return step.keys.some(k => t.includes(k)) ? '<div class="fb ok">Hit the step.</div>' : '<div class="fb miss">Missed the key part. Check the line.</div>';
+  }
+
+  let busy = false;
+  // ---------- Claude plays the owner when it's available ----------
+  let AI = null;
+  (async () => { try{ AI = window.claude ? await window.claude.use('sample') : null; }catch(e){ AI = null; } })();
+  const VIBE_TXT = {
+    friendly:'warm and easy to talk to, but careful with money', busy:'slammed and impatient, you want this fast',
+    skeptical:'you doubt everything and want proof', rude:'blunt, dismissive, a bit of a jerk (no slurs, no threats)',
+    chatty:'you go on tangents and tell stories', burned:'a web guy took your money and disappeared once, so you distrust website sellers',
+    cheap:'every dollar matters and you keep coming back to cost'
+  };
+  const SITE_TXT = {
+    demo:'You have an old website that is slow on phones, and you think it is fine.', good:'You have a decent website someone made a few years ago and you like it.',
+    booksy:'You only have a booking-app page, no real website.', broken:'Your website is broken right now (error page) and you have not noticed.',
+    none:'You have no website. People find you by word of mouth and Google Maps.'
+  };
+  const plain = t => String(t).replace(/\[[^\]]*\]/g, ' ').replace(/"/g, '').replace(/\s+/g, ' ').trim();
+  function base(){
+    const o = cur.o, unit = o.volQ.split(/ (do|come)\b/)[0];
+    return [
+      'You are role-playing a small-business owner in Malden, Massachusetts, in a door-to-door sales practice drill. Addissu, a young local guy from Alden Street, is practicing his pitch on you. Stay in character. Never mention AI. Never coach him.',
+      'YOU: ' + o.name + ', owner of ' + o.shop + ' (' + o.kind.toLowerCase() + '). About ' + o.j + ' ' + unit + ' a week; ' + o.tkN + ' is about $' + o.t + '. Mood: ' + VIBE_TXT[o.vibe] + '. ' + SITE_TXT[o.site],
+      'HE SELLS websites: buy it outright for $800 (if it breaks, that is on you), or $599 up front and $149 a month (normally $799 and $150) and he handles hosting, fixes and changes. ' + (['demo','good','booksy'].includes(o.site) ? 'He already built a new site for your shop and may show it on his phone: clean, fast, your real photos and reviews, a big call button.' : 'He has nothing built for you.'),
+      'HOW YOU TALK: like a real person at a counter. 1 or 2 short sentences, casual, contractions. Respond to EXACTLY what he just said, small talk included ("how\'s it going" gets a real answer). If he asks you a question, answer it first. Only give your numbers when he asks for them.',
+      '',
+      'Conversation so far:',
+      cur.log.map(x => x[0] + ': ' + x[1]).join('\n')
+    ].join('\n');
+  }
+  async function ask(prompt){
+    return AI.json(prompt, {modelTier:'quick', cache:false});
+  }
+  function aiFail(e){
+    cur.log.pop();
+    const last = $('convo').lastElementChild; if (last) last.remove();
+    if (e && (e.code === 'not_granted' || e.code === 'sampling_disabled')){ AI = null; micNote('Claude access is off, so the owner is back to set lines.'); }
+    else micNote(e && e.code === 'rate_limited' ? 'Too many messages too fast, or you hit your Claude usage limit. Wait a bit, then try again.' : 'Couldn\'t reach Claude. Say it again.');
+  }
+  function thinking(){ const d = document.createElement('div'); d.className = 'msg owner-m thinking'; d.innerHTML = '<small>' + esc(cur.o.name) + '</small>...'; $('convo').appendChild(d); $('convo').scrollTop = $('convo').scrollHeight; return d; }
+
+  async function aiStep(text){
+    const step = STEPS[cur.i], o = cur.o;
+    const fb = text ? check(text) : '';
+    if (fb.includes('ok') || !text) cur.hits++;
+    const said = text || plain(cur.altLine || step.line(o));
+    addMsg('you', '"' + said + '"', fb);
+    cur.altLine = null;
+    const r = respond(cur.i); cur.r = r; cur.ex = 0;
+    let dir;
+    if (r.k === 'ok') dir = 'This time, do NOT object. React naturally and let him keep going.';
+    else if (r.k === 'yes') dir = 'Agree to have him put it up, in your own words.';
+    else if (r.k === 'end' && cur.i === 0) dir = 'Twist: you are an employee, not the owner. Say ' + o.name + ' (the owner) isn\'t in today.';
+    else if (r.k === 'end') dir = 'Shut him down: you are not interested. Say it your own way.';
+    else dir = 'Push back with this kind of objection, said your own way so it fits what he just said: "' + r.say(o) + '"';
+    busy = true; const w = thinking();
+    try{
+      const res = await ask(base() + '\n\nYOUR NEXT LINE: ' + dir + '\nReply with only JSON: {"say": "your words"}');
+      w.remove();
+      const say = String((res && res.say) || r.say(o));
+      owner(say);
+      if (r.k === 'ok'){ reveal(r); busy = false; return advance(); }
+      if (r.k === 'yes'){ cur.out = 'Yes'; busy = false; return advance(); }
+      cur.objSaid = say; cur.phase = 'obj'; busy = false; showCue();
+    }catch(e){ w.remove(); busy = false; aiFail(e); }
+  }
+
+  async function aiObj(text){
+    const r = cur.r, o = cur.o;
+    const said = text || plain(r.tip(o));
+    addMsg('you', '"' + said + '"');
+    cur.ex++;
+    const close = r.k === 'close', notIn = r.k === 'end' && cur.i === 0;
+    const prompt = base() + '\n\n' + [
+      'You just pushed back with: "' + cur.objSaid + '". He answered (last line above).',
+      'A strong answer for reference: ' + plain(r.tip(o)),
+      notIn ? 'You are the employee. If he asked when the owner is around, give a real time. The conversation ends after this.' :
+      'Respond to exactly what he said. If he only asked you a question (like "is it the price?"), answer it honestly in character and stay unconvinced: resolved false. If his answer handled your concern well (agreed with you first, short, calm, tied to your money, asked again), you are satisfied: resolved true' + (close ? ', and you either agree (outcome "yes") or give your cell number to look at it later (outcome "number")' : '') + '. If it was weak you can push back again, or if you are ' + VIBE_TXT[o.vibe] + ' and it went badly, walk away (walked true).',
+      'This is exchange ' + cur.ex + ' of at most 3. On exchange 3 you must either resolve or walk.',
+      'Grade his last answer against the reference: "nailed", "shaky" or "missed".',
+      'Reply with only JSON: {"say": "your words", "resolved": true, "walked": false, "outcome": null, "grade": "shaky"}'
+    ].join('\n');
+    busy = true; const w = thinking();
+    try{
+      const res = await ask(prompt);
+      w.remove(); busy = false;
+      const say = String((res && res.say) || '...');
+      const g = {nailed:'n', shaky:'s', missed:'m'}[res && res.grade] || 's';
+      const gl = {n:'Nailed it', s:'Shaky', m:'Missed'}[g];
+      const last = [...$('convo').querySelectorAll('.you-m')].pop();
+      if (last) last.insertAdjacentHTML('beforeend', '<div class="fb ' + (g === 'm' ? 'miss' : 'ok') + '">' + gl + '</div>');
+      owner(say);
+      if (notIn){ cur[g]++; cur.out = res.resolved ? 'Follow-up time' : 'No'; return finish('The owner wasn\'t in. The right move is getting a time and leaving.'); }
+      if (res.walked || (!res.resolved && cur.ex >= 3)){ cur[g]++; cur.out = 'No'; return finish('They walked. Look at what you said right before, and try the reference answer next time.'); }
+      if (!res.resolved){ cur.objSaid = say; return showCue(); }
+      cur[g]++; reveal(r);
+      if (r.k === 'end'){ cur.out = 'Number'; cur.i = STEPS.length - 3; return advance(); }
+      if (close){ cur.out = res.outcome === 'yes' ? 'Yes' : 'Number'; if (cur.out === 'Number') cur.altLine = NOT_YET; }
+      advance();
+    }catch(e){ w.remove(); busy = false; aiFail(e); }
+  }
+
+  function submit(text){
+    if (busy || !$('end').hidden) return;
+    text = (text || '').trim();
+    if (AI) return cur.phase === 'step' ? aiStep(text) : aiObj(text);
+    if (cur.phase === 'step'){
+      const fb = cur.phase === 'step' && text ? check(text) : '';
+      if (fb.includes('ok')) cur.hits++;
+      else if (!text) cur.hits++;   // tapped "I said it": trust yourself
+      addMsg('you', text ? '"' + text + '"' : '[' + STEPS[cur.i].h + ']', fb);
+      cur.altLine = null;
+      const r = respond(cur.i); cur.r = r; busy = true;
+      setTimeout(() => {
+        busy = false;
+        owner(r.say(cur.o)); reveal(r);
+        if (r.k === 'ok') return advance();
+        if (r.k === 'yes'){ cur.out = 'Yes'; return advance(); }
+        cur.phase = 'obj'; showCue();
+      }, 350);
+    } else {
+      addMsg('you', text ? '"' + text + '"' : '[You answered]');
+      $('act').hidden = true; $('typed').hidden = true; $('rate').hidden = false;
+      $('cue-line').hidden = false; $('peek').hidden = true;
+      $('cue-eye').textContent = 'How did that go? Compare with the SOP answer';
+    }
+  }
+  function reveal(r){
+    if (r.reveal === 'j') $('k-j').textContent = cur.o.j;
+    if (r.reveal === 't'){ $('k-t').textContent = money(cur.o.t); $('k-y').textContent = money(cur.o.t * 52); }
+  }
+  function advance(){
+    cur.phase = 'step'; cur.objSaid = null; cur.i++;
+    if (cur.i >= STEPS.length){ if (!cur.out) cur.out = 'Number'; return finish(); }
+    busy = true; setTimeout(() => { busy = false; showCue(); }, 250);
+  }
+  function rated(rt){
+    if (busy || $('rate').hidden) return;
+    cur[['m','s','n'][rt]]++;
+    const r = cur.r, o = cur.o, hard = ['rude','skeptical','burned'].includes(o.vibe);
+    if (r.k === 'end'){
+      owner(r.fol(o)); cur.out = r.out; return finish(r.out === 'No' ? 'They said no. Leaving friendly keeps the door open for later.' : 'The owner wasn\'t in. The right move is getting a time and leaving.');
+    }
+    if (r.k === 'close'){
+      if (rt === 2){ owner("...Yeah, alright. Let's do it."); cur.out = 'Yes'; return advance(); }
+      if (rt === 1){ owner("Just text it to me. I'll look at it tonight."); cur.out = 'Number'; cur.altLine = NOT_YET; return advance(); }
+      owner(pick(SOFT_END)); cur.out = 'No'; return finish('You missed the close. Practice that answer until it\'s automatic.');
+    }
+    if (rt === 0 && hard && Math.random() < 0.4){ owner(pick(SOFT_END)); cur.out = 'No'; return finish('A ' + VIBES[o.vibe].label.toLowerCase() + ' owner walked when the answer didn\'t land.'); }
+    owner(r.fol(o)); reveal(r); advance();
+  }
+  $('rate').addEventListener('click', e => { const b = e.target.closest('button'); if (b) rated(+b.dataset.r); });
+  $('said').addEventListener('click', () => submit($('typed').value));
+  $('typed').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); submit($('typed').value); } });
+
+  function finish(why){
+    $('cue').hidden = true; $('end').hidden = false; dots();
+    const out = cur.out || 'No';
+    $('end-r').textContent = out === 'Yes' ? 'They said yes.' : out === 'Number' ? 'You got their number.' : out === 'Follow-up time' ? 'You got a time to come back.' : 'No this time.';
+    $('end-why').textContent = why || (out === 'Yes' ? 'Get the cell, send the link and agreement within the hour.' : 'Text them tonight so it\'s fresh.');
+    const stepsDone = Math.min(cur.i, STEPS.length);
+    $('e-steps').textContent = cur.hits + '/' + stepsDone; $('e-n').textContent = cur.n; $('e-s').textContent = cur.s; $('e-m').textContent = cur.m;
+    totals.doors++; if (out === 'Yes') totals.yes++; if (out === 'Yes' || out === 'Number') totals.numbers++;
+    totals.n += cur.n; totals.s += cur.s; totals.m += cur.m; store.set('rp.tot', totals);
+    $('totals').textContent = 'All time: ' + totals.doors + ' doors, ' + totals.yes + ' yeses, ' + totals.numbers + ' numbers. Objections ' + totals.n + ' nailed, ' + totals.s + ' shaky, ' + totals.m + ' missed.';
+    $('next').focus();
+  }
+  $('next').addEventListener('click', newDoor);
+
+  function setTog(el, on){ el.setAttribute('aria-pressed', on ? 'true' : 'false'); }
+  $('t-test').addEventListener('click', () => { testMode = !testMode; store.set('rp.test', testMode); setTog($('t-test'), testMode); if (!$('cue').hidden && $('rate').hidden) showCue(); });
+  setTog($('t-test'), testMode);
+  window.CR = {newOwner, VIBES, money, round};
+  try{ speechSynthesis.getVoices(); }catch(e){}
+  newDoor();
+})();
+</script>
+<script>
+(function(){
+  const $ = id => document.getElementById(id);
+  const pick = a => a[Math.floor(Math.random() * a.length)];
+  const esc = t => String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;');
+
+  // ---------- Tabs and sound toggle ----------
+  function openTab(id){
+    ['live','drill'].forEach(t => { $(t).hidden = t !== id; $('tab-' + t).setAttribute('aria-selected', t === id ? 'true' : 'false'); });
+    Voice.stop();
+    try{ localStorage.setItem('rp.tab', id); }catch(e){}
+  }
+  $('tab-live').addEventListener('click', () => openTab('live'));
+  $('tab-drill').addEventListener('click', () => openTab('drill'));
+  try{ const t = localStorage.getItem('rp.tab'); if (t === 'drill') openTab('drill'); }catch(e){}
+  const snd = $('t-sound');
+  snd.setAttribute('aria-pressed', Voice.isOn() ? 'true' : 'false');
+  snd.addEventListener('click', () => { Voice.setOn(!Voice.isOn()); snd.setAttribute('aria-pressed', Voice.isOn() ? 'true' : 'false'); });
+
+  // ---------- The owner ----------
+  const VIBE_DESC = {
+    friendly: 'warm and easy to talk to, but still careful with money',
+    busy: 'slammed and impatient; you want this over fast and you cut him off if he rambles',
+    skeptical: 'you doubt everything and want proof; you ask a lot of "how do I know" questions',
+    rude: 'blunt, dismissive and a bit of a jerk; you test whether he can take it (no slurs, no threats)',
+    chatty: 'you go off on tangents and tell stories; easy to like but hard to pin down to a decision',
+    burned: 'you paid a web guy before who took the money and disappeared, so you distrust anyone selling websites',
+    cheap: 'every dollar matters to you; you keep coming back to cost'
+  };
+  const SITE_DESC = {
+    demo: 'You have an old website that is slow and hard to use on phones. You think it is "fine".',
+    good: 'You have a decent website that someone made for you a few years ago, and you think it is good.',
+    booksy: 'You only have a booking-app page, no real website. You think the booking app is enough.',
+    broken: 'Your website is broken right now (it shows an error page) and you have not noticed.',
+    none: 'You have no website at all. People find you through word of mouth and Google Maps.'
+  };
+  const SCENES = [
+    ['{n} is on the phone behind the counter.', 'You are on the phone with a supplier when he walks in.'],
+    ['{n} is ringing up a customer, and one more is waiting.', 'You are ringing up a customer and one more is waiting.'],
+    ['{n} is eating lunch at the counter.', 'You are eating lunch at the counter.'],
+    ['It\'s quiet. {n} is scrolling on their phone.', 'It is a slow afternoon and you are scrolling on your phone.'],
+    ['The place is packed and {n} looks stressed.', 'You are short-staffed and it is busy.'],
+    ['{n} just finished arguing with a delivery driver.', 'You just finished arguing with a delivery driver and you are annoyed.']
+  ];
+  const DEMO_SITES = ['demo','good','booksy'];
+
+  function rules(o, scene){
+    const unit = o.volQ.split(/ (do|come)\b/)[0];
+    return [
+      'You are role-playing a small-business owner in Malden, Massachusetts, for a door-to-door sales practice drill. The user plays Addissu, a young local guy who lives on Alden Street and builds websites for local businesses. He has just walked into your shop. Stay in character the whole time: never mention AI, never coach him, never break character.',
+      '',
+      'YOU: ' + o.name + ', owner of ' + o.shop + ' (' + o.kind.toLowerCase() + '). You do about ' + o.j + ' ' + unit + ' a week, and ' + o.tkN + ' is about $' + o.t + '. You have about ' + o.reviews + ' Google reviews.',
+      'WEBSITE: ' + SITE_DESC[o.site],
+      'MOOD: ' + VIBE_DESC[o.vibe] + '.',
+      'RIGHT NOW: ' + scene,
+      '',
+      'WHAT HE SELLS (you do not know any of this until he tells you): a website for your business. Two ways: buy it outright for $800 one time (if it breaks, that is on you), or a care plan, normally $799 up front and $150 a month, on a fall special for $599 and $149 a month, where he handles hosting, fixes and any changes you text him. ' + (DEMO_SITES.includes(o.site) ? 'He has already built a new website for your shop that he can show you on his phone. If he shows it, it looks clean and modern, loads fast, has your real photos and reviews, and has a big button to call. React to it like a real person seeing their own business on a nice site.' : 'He has not built anything for you, so he has nothing to show you.'),
+      '',
+      'HOW TO PLAY:',
+      '- Talk like a real person at a counter: 1 to 3 short sentences, casual, contractions. Sometimes get distracted or cut him off. Never give speeches.',
+      '- Do not make it easy. Push back the way a real owner in your mood would: what is this, what are you selling, who are you, how much, why would I need it, is this AI, can I cancel, I have a guy, let me think about it, and so on. Vary it. Sometimes bring up an objection he will not expect.',
+      '- Only say your numbers (jobs a week, normal job) if he asks.',
+      '- Warm up slowly when he sells well: friendly and quick, asks about your business, does the money math with YOUR numbers, shows instead of tells, answers objections calmly in a sentence or two, and asks plainly for the sale. If he does that, you can say yes or give him your cell number.',
+      '- Cool down when he sells badly: long pitches, jargon like "online presence", "solutions", "SEO", "leverage", pushing, not listening, or numbers he made up. Get shorter and colder. You can tell him to leave.',
+      '- End the conversation when it would really end: you agree, you give your number or a time to come back, or you send him away.',
+      '',
+      'REPLY FORMAT: only a JSON object, nothing else: {"say": "what you say out loud (you may add one short action in *asterisks*)", "ended": false, "outcome": null, "warmth": 3}. "ended" is true only when the conversation is over. "outcome" is "yes", "number", "later" or "no" when ended, else null. "warmth" is 0 to 10, how close you are to buying right now.'
+    ].join('\n');
+  }
+
+  let sample = null, L = null, busy = false, doors = 0, ctl = null;
+  function bubble(cls, html){
+    const d = document.createElement('div'); d.className = 'msg ' + cls; d.innerHTML = html;
+    $('l-convo').appendChild(d); $('l-convo').scrollTop = $('l-convo').scrollHeight; return d;
+  }
+  function note(t){ $('l-note').textContent = t || ''; }
+  function setMood(w){ $('l-mood').style.width = Math.max(4, Math.min(100, w * 10)) + '%'; }
+  function voiceFor(o){ const vb = CR.VIBES[o.vibe]; return {voice:o.voice, rate:vb.rate, pitch:vb.pitch}; }
+
+  function newLive(){
+    if (ctl) ctl.abort();
+    const o = CR.newOwner(), sc = pick(SCENES);
+    L = {o, turns:[], log:[], over:false, outcome:null, scene:sc[1]};
+    doors++;
+    $('l-door').textContent = 'Live door ' + doors;
+    $('l-who').textContent = o.name + ' · ' + o.shop;
+    $('l-chips').innerHTML = '<span class="chip">' + esc(o.kind) + '</span><span class="chip vibe">' + CR.VIBES[o.vibe].label + '</span><span class="chip site">' + esc(o.siteLabel) + '</span>';
+    $('l-scene').textContent = sc[0].replace('{n}', o.name) + ' You walk in.';
+    $('l-convo').innerHTML = ''; $('l-coach').hidden = true; $('l-cue').hidden = false;
+    $('l-in').value = ''; setMood(3);
+    note(sample ? '' : 'Connecting to Claude...');
+    if (sample === false) unavailable();
+  }
+  function unavailable(){
+    note('The live owner only works on claude.ai, where it runs on your Claude plan. The Script drill tab works anywhere.');
+    $('l-send').disabled = true;
+  }
+
+  async function send(text){
+    text = (text || '').trim();
+    if (!text || busy || L.over || !sample) return;
+    Voice.stop();
+    $('l-in').value = '';
+    bubble('you-m', '<small>You</small>' + esc(text));
+    L.log.push(['You', text]);
+    L.turns.push({role:'user', content:(L.turns.length ? '' : rules(L.o, L.scene) + '\n\n') + 'Addissu says: "' + text + '"'});
+    busy = true; $('l-send').disabled = true;
+    const wait = bubble('owner-m thinking', '<small>' + esc(L.o.name) + '</small>...');
+    ctl = new AbortController();
+    try{
+      const r = await sample.json(L.turns, {modelTier:'quick', cache:false, signal:ctl.signal});
+      const say = String((r && r.say) || '...');
+      L.turns.push({role:'assistant', content:JSON.stringify(r)});
+      L.log.push([L.o.name, say]);
+      wait.classList.remove('thinking');
+      wait.innerHTML = '<small>' + esc(L.o.name) + '</small>' + esc(say).replace(/\*([^*]+)\*/g, '<span class="do">[$1]</span>');
+      Voice.speak(say, voiceFor(L.o));
+      if (typeof r.warmth === 'number') setMood(r.warmth);
+      if (r.ended){
+        L.over = true; L.outcome = r.outcome || 'no';
+        bubble('sys', esc({yes:'They said yes.', number:'You got their number.', later:'You got a time to come back.', no:'Door over. No this time.'}[L.outcome] || 'Door over.'));
+        coach();
+      }
+    }catch(e){
+      L.turns.pop(); L.log.pop(); wait.remove();
+      if (e && e.code === 'cancelled') return;
+      $('l-in').value = text;
+      note({not_granted:'Claude access was declined for this page, so the live owner is off. The Script drill tab still works.',
+            rate_limited:'Too many messages too fast, or you hit your Claude usage limit. Wait a bit, then press Send again.',
+            session_expired:'Sign in to claude.ai again, then press Send.',
+            invalid_json:'The owner got tongue-tied. Press Send again.'}[e && e.code] || 'Something went wrong reaching Claude. Press Send to try again.');
+      if (e && (e.code === 'not_granted' || e.code === 'sampling_disabled')) unavailable();
+    }finally{
+      busy = false; if (sample) $('l-send').disabled = false;
+    }
+  }
+
+  async function coach(){
+    if (!L.log.length || !sample) return;
+    $('l-cue').hidden = true; $('l-coach').hidden = false;
+    const out = $('l-coach-t'); out.textContent = 'Thinking...';
+    const o = L.o;
+    const prompt = [
+      'You are a blunt but encouraging door-to-door sales coach who teaches like Alex Hormozi. Addissu is practicing walking into local businesses in Malden, MA to sell websites. This was a practice conversation with a role-played owner.',
+      '',
+      'His guidelines (the 7 beats): 1) walk in like a neighbor, find the owner, promise it is quick; 2) get them talking: jobs a week and what a normal job is worth; 3) do the money math with THEIR numbers (one lost job a week times 52), then go quiet; 4) show, don\'t tell: if a demo exists say word for word "I\'m not here to pitch you a website. I\'m here to show you what we already built for you." and hand over the phone, otherwise have them pull up their site; 5) the offer in plain words: own it for $800 (on you if it breaks) or $599 and $149 a month and he handles everything; 6) ask plainly "Want me to put it up this week?" and stop talking; 7) leave with a yes, a cell number or a time, and ask for a referral.',
+      'Objection rules: agree first, answer in one or two sentences, bring it back to their money, ask again. No jargon. Never argue.',
+      '',
+      'The owner: ' + o.name + ', ' + o.kind + ', mood ' + CR.VIBES[o.vibe].label + ', ' + o.siteLabel + '. Real numbers: ' + o.j + ' a week, about $' + o.t + ' a job.',
+      'Outcome: ' + (L.outcome || 'he ended it early'),
+      '',
+      'Transcript:',
+      L.log.map(x => x[0] + ': ' + x[1]).join('\n'),
+      '',
+      'Write plain text, no markdown symbols (no ** or #), under 200 words, in this order:',
+      'OVERALL: one line with a score out of 10.',
+      'WHAT LANDED: 2 lines starting with "- ", quoting his own words.',
+      'FIX NEXT TIME: 2 or 3 lines starting with "- ", each naming the moment and giving a better line he could say, written the casual way he talks.',
+      'BEATS: one line listing beats 1-7 as hit or missed.'
+    ].join('\n');
+    ctl = new AbortController();
+    try{
+      await sample(prompt, {cache:false, signal:ctl.signal, onText:({text}) => { out.textContent = text; }});
+    }catch(e){
+      if (e && e.code === 'cancelled') return;
+      out.textContent = (e && e.text) || 'Couldn\'t get coaching this time. Start the next door and try again later.';
+    }
+  }
+
+  $('l-send').addEventListener('click', () => send($('l-in').value));
+  $('l-in').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); send($('l-in').value); } });
+  $('l-end').addEventListener('click', () => { if (busy) return; if (!L.log.length){ newLive(); return; } L.over = true; coach(); });
+  $('l-next').addEventListener('click', newLive);
+  Voice.makeMic($('l-mic'), {onText: t => { $('l-in').value = t; }, onDone: t => send(t), note});
+
+  newLive();
+  (async () => {
+    try{ sample = window.claude ? await window.claude.use('sample') : null; }catch(e){ sample = null; }
+    if (!sample){ sample = false; unavailable(); $('tab-live').hidden = true; openTab('drill'); return; }
+    note('');
+  })();
+})();
+</script>
+
+</html>
