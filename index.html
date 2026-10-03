@@ -197,25 +197,40 @@ details.card li b{display:block}
 <script>
 window.Voice = (function(){
   const load = (k,d) => { try{ const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; }catch(e){ return d; } };
-  let on = load('rp.voice', true);
+  let on = load('rp.voice3', true);
   const NOVELTY = /Albert|Bad News|Bahh|Bells|Boing|Bubbles|Cellos|Good News|Jester|Organ|Superstar|Trinoids|Whisper|Wobble|Zarvox|Grandma|Grandpa|Eddy|Flo|Reed|Rocko|Sandy|Shelley|Junior|Ralph|Kathy|Fred/i;
   function voices(){ try{ return speechSynthesis.getVoices().filter(v => /^en[-_]US/i.test(v.lang) && !NOVELTY.test(v.name)); }catch(e){ return []; } }
   try{ speechSynthesis.getVoices(); }catch(e){}
   function clean(t){ return String(t).replace(/\*[^*]*\*/g, ' ').replace(/\[[^\]]*\]/g, ' ').replace(/\.\.\./g, ', ').trim(); }
-  function stop(){ try{ speechSynthesis.cancel(); }catch(e){} }
+  let token = 0, lastSaid = '';
+  function stop(){ token++; try{ speechSynthesis.cancel(); }catch(e){} }
   function speak(text, p){
     if (!on || !('speechSynthesis' in window)) return;
     const t = clean(text); if (!t) return;
-    try{
-      stop();
-      const u = new SpeechSynthesisUtterance(t);
-      const vs = voices();
-      if (vs.length) u.voice = vs[Math.floor((p.voice || 0) * vs.length) % vs.length];
-      u.rate = p.rate || 1; u.pitch = p.pitch || 1;
-      speechSynthesis.speak(u);
-    }catch(e){}
+    stop();
+    const my = token;
+    lastSaid = t.toLowerCase();
+    // Safari can replay a line if speak() runs right after cancel(), so wait a beat.
+    setTimeout(() => {
+      if (my !== token) return;   // a newer line or a stop came in
+      try{
+        const u = new SpeechSynthesisUtterance(t);
+        const vs = voices();
+        if (vs.length) u.voice = vs[Math.floor((p.voice || 0) * vs.length) % vs.length];
+        u.rate = p.rate || 1; u.pitch = p.pitch || 1;
+        u.onend = () => { if (my === token) try{ speechSynthesis.cancel(); }catch(e){} };
+        speechSynthesis.speak(u);
+      }catch(e){}
+    }, 150);
   }
-  function setOn(v){ on = v; try{ localStorage.setItem('rp.voice', JSON.stringify(v)); }catch(e){} if (!v) stop(); }
+  // True when the mic mostly heard the owner's own last line.
+  function isEcho(heard){
+    const h = heard.toLowerCase().replace(/[^a-z' ]/g,'').split(/\s+/).filter(Boolean);
+    if (!h.length || !lastSaid) return false;
+    const said = new Set(lastSaid.replace(/[^a-z' ]/g,'').split(/\s+/));
+    return h.filter(w => said.has(w)).length / h.length > 0.8;
+  }
+  function setOn(v){ on = v; try{ localStorage.setItem('rp.voice3', JSON.stringify(v)); }catch(e){} if (!v) stop(); }
   // Tap to start, tap to stop. Keeps listening through pauses until you tap again.
   function makeMic(btn, h){
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -235,7 +250,7 @@ window.Voice = (function(){
       rec.onend = () => { committed = (committed + ' ' + live).trim(); live = ''; if (want){ try{ begin(); }catch(e){ want = false; finish(); } } else finish(); };
       rec.start();
     }
-    function finish(){ btn.classList.remove('on'); btn.textContent = label; const t = committed; committed = ''; if (t) h.onDone(t); }
+    function finish(){ btn.classList.remove('on'); btn.textContent = label; const t = committed; committed = ''; if (t && !isEcho(t)) h.onDone(t); }
     btn.addEventListener('click', () => {
       if (!want){
         stop(); want = true; committed = ''; live = '';
@@ -290,7 +305,8 @@ window.Voice = (function(){
     rude:      {label:'Rude', rate:1.08, pitch:0.85},
     chatty:    {label:'Chatty', rate:1.05, pitch:1.1},
     burned:    {label:'Got burned before', rate:0.95, pitch:0.95},
-    cheap:     {label:'Watches every dollar', rate:1.0, pitch:0.95}
+    cheap:     {label:'Watches every dollar', rate:1.0, pitch:0.95},
+    hostile:   {label:'Angry, curses', rate:1.15, pitch:0.85}
   };
   const SITES = [
     ['demo', 'Bad site, demo built', 4],
@@ -304,9 +320,11 @@ window.Voice = (function(){
     const name = pick(NAMES), b = pick(BIZ);
     const s = wpick(SITES, x => x[2]);
     const vibe = pick(Object.keys(VIBES));
+    // Some owners won't buy today no matter what. Leaving well is the win with them.
+    const never = Math.random() < (['hostile','rude'].includes(vibe) ? 0.5 : 0.2);
     let j = R(b[4][0], b[4][1]); j = j > 40 ? round(j,10) : j > 12 ? round(j,5) : j;
     let t = R(b[5][0], b[5][1]); t = t >= 500 ? round(t,100) : t >= 100 ? round(t,25) : round(t,5);
-    return {name, kind:b[0], shop:b[1](name), volQ:b[2], tkN:b[3], j, t, site:s[0], siteLabel:s[1], vibe, search:b[6],
+    return {name, kind:b[0], shop:b[1](name), volQ:b[2], tkN:b[3], j, t, site:s[0], siteLabel:s[1], vibe, never, search:b[6],
             reviews:R(40,600), voice:Math.random(), other:pick(BIZ.filter(x=>x!==b)), otherName:pick(NAMES.filter(x=>x!==name))};
   }
 
@@ -334,13 +352,17 @@ window.Voice = (function(){
   const SOFT_END = ["Yeah, I don't think so. Thanks though.", "I'm good, man. Take care.", "Nah. I gotta get back to work."];
   const RESP = [
     [ // 1 owner?
+      {k:'obj', say:o=>"Who the hell are you? I'm in the middle of something.", v:['hostile'], intro:true, tip:o=>'"My bad. I\'m Addissu, I live right up the street on Alden. I\'ll be quick."', fol:o=>"...What."},
+      {k:'obj', say:o=>"Are you kidding me? Another damn salesman?", v:['hostile'], tip:o=>'"Ha, I know, I know. Ten seconds and I\'m out, promise."', fol:o=>"...Ten seconds."},
       {k:'ok', say:o=>"Yeah, that's me. What's up?", v:['friendly','chatty','cheap','burned']},
       {k:'ok', say:o=>"Yeah. Make it quick, I got somebody in five minutes.", v:['busy']},
-      {k:'obj', say:o=>"Who's asking?", v:['skeptical','rude','burned'], tip:o=>'Smile and say who you are: "Oh, sorry. I\'m Addissu, I live right up the street on Alden."', fol:o=>"Okay... yeah, I'm the owner."},
+      {k:'obj', say:o=>"Who's asking?", v:['skeptical','rude','burned'], intro:true, tip:o=>'Smile and say who you are: "Oh, sorry. I\'m Addissu, I live right up the street on Alden."', fol:o=>"Okay... yeah, I'm the owner."},
       {k:'end', say:o=>"No, " + o.name + " isn't in today.", v:[], w:0.6, tip:o=>'Don\'t pitch the employee. Get a time and leave: "Oh okay, when\'s a good time to catch them?"', fol:o=>"Try tomorrow, like ten in the morning.", out:'Follow-up time'},
       {k:'obj', say:o=>"No solicitors. Didn't you see the sign?", v:['rude'], tip:o=>['demo','good','booksy'].includes(o.site) ? '"Oh my bad, I\'ll go. I actually already built you a website, though. Want me to just text you the link?"' : '"Oh my bad. Ten seconds, I promise, I\'m from the neighborhood."', fol:o=>"...Fine. Quick."}
     ],
     [ // 2 who you are
+      {k:'obj', say:o=>"I don't give a shit where you live. What do you want?", v:['hostile'], tip:o=>'"Fair. Real quick, can I ask you one question about the shop?"', fol:o=>"Make it fast."},
+      {k:'end', say:o=>"Look, I'm not buying anything today. I gotta get back to work.", v:[], never:true, w:1.2, tip:o=>'"All good, appreciate you. I\'m right up on Alden if you ever need anything." [Leave friendly. Never argue.]', fol:o=>"Yeah. Take care.", out:'No'},
       {k:'ok', say:o=>"Oh, Alden? My cousin's over there. Okay, what's up?", v:['chatty','friendly']},
       {k:'ok', say:o=>"Okay. What's this about?", v:['skeptical','busy','cheap','burned']},
       {k:'ok', say:o=>"Mm-hm.", v:['busy','rude']},
@@ -349,18 +371,22 @@ window.Voice = (function(){
       {k:'obj', say:o=>"Are you one of those Google guys? I get those calls every day.", v:['burned','skeptical'], tip:o=>'"No, no. I\'m just a guy from the neighborhood. No calls, no Google stuff."', fol:o=>"Okay. What is it."}
     ],
     [ // 3 volume
+      {k:'obj', say:o=>"None of your damn business.", v:['hostile'], tip:o=>'"Ha, fair. Ballpark, like more than ' + Math.max(2, Math.round(o.j/2)) + '?"', fol:o=>"Yeah. Like " + o.j + ".", reveal:'j'},
       {k:'ok', say:o=>"Uh, maybe " + o.j + "? Depends on the week.", v:['friendly','busy','cheap'], reveal:'j'},
       {k:'ok', say:o=>"Oh, it's been crazy. Probably " + o.j + " this week. Last week was slower.", v:['chatty'], reveal:'j'},
       {k:'obj', say:o=>"Why do you need to know that?", v:['skeptical','rude','burned'], tip:o=>'"Just curious. I\'m trying to figure out if what I built is even worth your time."', fol:o=>"I dunno. " + o.j + ", give or take.", reveal:'j'},
       {k:'obj', say:o=>"Enough.", v:['rude'], tip:o=>'"Ha, fair. Like, more than ' + Math.max(2, Math.round(o.j/2)) + '?"', fol:o=>"Yeah, more. Like " + o.j + ".", reveal:'j'}
     ],
     [ // 4 ticket
+      {k:'obj', say:o=>"What the hell does it matter?", v:['hostile'], tip:o=>'"Because I\'m about to do some quick math that might surprise you. Ballpark?"', fol:o=>o.t + ", roughly. Happy?", reveal:'t'},
       {k:'ok', say:o=>"Depends. Average, like " + o.t + " bucks?", v:['friendly','chatty','busy'], reveal:'t'},
       {k:'ok', say:o=>"Usually around " + o.t + ".", v:['skeptical','cheap','burned'], reveal:'t'},
       {k:'obj', say:o=>"Why, you writing a book?", v:['rude'], tip:o=>'"Ha. No, I\'m just trying to do some quick math for you. Ballpark?"', fol:o=>"Like " + o.t + ".", reveal:'t'},
       {k:'obj', say:o=>"It varies a lot.", v:['skeptical','cheap'], tip:o=>'"Totally. Just a normal one, ballpark?"', fol:o=>"Call it " + o.t + ".", reveal:'t'}
     ],
     [ // 5 math
+      {k:'obj', say:o=>"That's bullshit. Nobody's losing me customers.", v:['hostile'], tip:o=>'"Maybe not. Even one a month is still like ' + grand(o.t*12) + ' a year. Can I just show you one thing?"', fol:o=>"...Fine. Show me."},
+      {k:'end', say:o=>"Yeah, I don't need any of this. I'm good.", v:[], never:true, w:1.2, tip:o=>'"All good, appreciate you. I\'m right up on Alden if you ever need anything." [Leave friendly. Never argue.]', fol:o=>"Yeah. Take care.", out:'No'},
       {k:'ok', say:o=>"Huh. I never thought about it like that.", v:['friendly','chatty']},
       {k:'ok', say:o=>"Hm.", v:['busy','skeptical']},
       {k:'obj', say:o=>"I'm not losing anybody. All my customers are word of mouth.", v:['skeptical','chatty','friendly'], tip:o=>'"Yeah, word of mouth is huge. Where do those people go right after somebody tells them about you?" [Pause.] "They Google you."', fol:o=>"...Yeah, probably."},
@@ -369,6 +395,8 @@ window.Voice = (function(){
       {k:'obj', say:o=>"So what, you're saying my business sucks?", v:['rude'], tip:o=>'"No, not at all. You\'re clearly doing well. This is just the people who look you up and go somewhere else."', fol:o=>"...Alright."}
     ],
     [ // 6 proof
+      {k:'obj', say:o=>"I don't want your damn website.", v:['hostile'], tip:o=>'"All good. Just look at it for ten seconds. If you hate it, I\'m gone."', fol:o=>"...Hm. That's not bad, I guess."},
+      {k:'end', say:o=>"Nope. Not interested. Thanks.", v:[], never:true, w:1.2, tip:o=>'"All good, appreciate you. I\'m right up on Alden if you ever need anything." [Leave friendly. Never argue.]', fol:o=>"Yeah. Take care.", out:'No'},
       {k:'obj', say:o=>"Wait, you made this? How'd you get my photos?", v:['friendly','chatty'], s:['demo','good','booksy'], tip:o=>'"Yeah. Pulled them off your Google page. It\'s yours if you want it."', fol:o=>"Huh. That's actually nice."},
       {k:'obj', say:o=>"I already have a website. It's fine.", v:['skeptical','cheap'], s:['good','demo'], w:2, tip:o=>'"Yeah? Pull it up real quick next to this one. Which one would you call from?"', fol:o=>"...Okay, yours is cleaner. I'll give you that."},
       {k:'obj', say:o=>"Is this AI?", v:['skeptical','burned'], s:['demo','good','booksy'], tip:o=>'"I use AI to build it fast, yeah, everybody does now. I\'m the one keeping it running, though."', fol:o=>"Hm. It looks good though."},
@@ -381,6 +409,8 @@ window.Voice = (function(){
       {k:'ok', say:o=>"Huh. Okay, keep going.", v:['busy','friendly']}
     ],
     [ // 7 offer
+      {k:'obj', say:o=>"A hundred forty-nine a month? Get the hell outta here.", v:['hostile'], tip:o=>'"Yeah, I get it. It\'s less than one job a month, though. One extra customer and it\'s paid for."', fol:o=>"...Still a lot."},
+      {k:'end', say:o=>"Yeah, no. I'm not paying for that. Thanks though.", v:[], never:true, w:1.2, tip:o=>'"All good, appreciate you. I\'m right up on Alden if you ever need anything." [Leave friendly. Never argue.]', fol:o=>"Yeah. Take care.", out:'No'},
       {k:'obj', say:o=>"A hundred forty-nine a month? That's a lot.", v:['cheap','skeptical'], w:2, tip:o=>'"Yeah, I get it. It\'s less than one job, though. One extra customer a month and it\'s paid for."', fol:o=>"...One job, huh."},
       {k:'obj', say:o=>"I'd rather just pay once and be done.", v:['cheap','busy'], tip:o=>'"You can. It\'s eight hundred and it\'s yours. Just, if it breaks, you\'re calling somebody. With the plan you just text me."', fol:o=>"Okay. I get it."},
       {k:'obj', say:o=>"Can I cancel whenever?", v:['skeptical','burned'], tip:o=>'Answer with the term you picked, short: "Yeah, it\'s month to month. No contract."', fol:o=>"Okay."},
@@ -390,6 +420,7 @@ window.Voice = (function(){
       {k:'ok', say:o=>"Okay. That's not bad, actually.", v:['friendly','chatty']}
     ],
     [ // 8 ask (follow-up depends on how you rate yourself)
+      {k:'end', say:o=>"No. Get out of my shop.", v:['hostile'], w:1.5, tip:o=>'"No problem, appreciate your time. Have a good one." [Stay calm. Never argue, never get smart.]', fol:o=>"Yeah, yeah.", out:'No'},
       {k:'yes', say:o=>"Yeah, alright. Let's do it.", v:['friendly','chatty'], w:0.8},
       {k:'close', say:o=>"Let me think about it.", v:['skeptical','cheap','busy','burned'], w:2, tip:o=>'"Yeah, for sure. Is it the price or something else?" [Answer that one thing, then ask again.]'},
       {k:'close', say:o=>"I gotta talk to my partner first.", v:['friendly','skeptical'], tip:o=>'"Makes sense. What do you think they\'ll say?"'},
@@ -398,10 +429,12 @@ window.Voice = (function(){
       {k:'end', say:o=>"Not interested.", v:['rude'], tip:o=>'"All good, appreciate you. I\'m right up on Alden if you ever need anything." [Leave friendly.]', fol:o=>"Yeah. Take care.", out:'No'}
     ],
     [ // 9 number
+      {k:'obj', say:o=>"I'm not giving you my damn number.", v:['hostile'], tip:o=>'"Totally fine. Here\'s mine instead. Text me if you ever want it."', fol:o=>"...Whatever. Leave it on the counter."},
       {k:'ok', say:o=>"Yeah, it's 781-555-0" + R(100,199) + ".", v:['friendly','chatty','busy','cheap','skeptical','burned']},
       {k:'obj', say:o=>"Just give me your card.", v:['rude','busy','skeptical'], tip:o=>'"I don\'t have cards yet. What\'s your cell? I\'ll text you so you have mine."', fol:o=>"...Fine. 781-555-0" + R(100,199) + "."}
     ],
     [ // 10 referral
+      {k:'ok', say:o=>"No. Now get out of here, I'm busy.", v:['hostile']},
       {k:'ok', say:o=>"Try the " + o.other[0].toLowerCase() + " down the block. Their website's a mess.", v:['friendly','chatty']},
       {k:'ok', say:o=>"Talk to " + o.otherName + " at the " + o.other[0].toLowerCase() + " next door. Tell them I sent you.", v:['chatty','friendly']},
       {k:'ok', say:o=>"Nah, not really.", v:['busy','rude','skeptical','cheap','burned']}
@@ -409,7 +442,7 @@ window.Voice = (function(){
   ];
   function respond(i){
     const o = cur.o;
-    const list = RESP[i].filter(r => !r.s || r.s.includes(o.site));
+    const list = RESP[i].filter(r => (!r.s || r.s.includes(o.site)) && (!r.never || o.never) && !(o.never && r.k === 'yes'));
     return wpick(list, r => (r.w || 1) * (r.v.includes(o.vibe) ? 3 : r.v.length ? 0.6 : 1));
   }
 
@@ -426,13 +459,14 @@ window.Voice = (function(){
     d.className = 'msg ' + (who === 'owner' ? 'owner-m' : who === 'you' ? 'you-m' : 'sys');
     d.innerHTML = (who === 'owner' ? '<small>' + esc(cur.o.name) + '</small>' : who === 'you' ? '<small>You</small>' : '') + fmt(text) + (extra || '');
     $('convo').appendChild(d); $('convo').scrollTop = $('convo').scrollHeight;
+    if (who === 'you' && /alden|i'?m addis|my name/i.test(text)) cur.introDone = true;
     if (who === 'owner' || who === 'you') cur.log.push([who === 'owner' ? cur.o.name : 'Addissu', text.replace(/^"|"$/g, '')]);
     return d;
   }
   function owner(text){ addMsg('owner', '"' + text + '"'); speak(text); }
 
   function newDoor(){
-    cur = {o:newOwner(), i:0, phase:'step', r:null, hits:0, n:0, s:0, m:0, out:null, log:[], ex:0, objSaid:null};
+    cur = {o:newOwner(), i:0, phase:'step', r:null, hits:0, n:0, s:0, m:0, out:null, log:[], ex:0, objSaid:null, introDone:false};
     const o = cur.o;
     $('door-n').textContent = 'Door ' + (totals.doors + 1);
     $('o-who').textContent = o.name + ' · ' + o.shop;
@@ -488,7 +522,8 @@ window.Voice = (function(){
     friendly:'warm and easy to talk to, but careful with money', busy:'slammed and impatient, you want this fast',
     skeptical:'you doubt everything and want proof', rude:'blunt, dismissive, a bit of a jerk (no slurs, no threats)',
     chatty:'you go on tangents and tell stories', burned:'a web guy took your money and disappeared once, so you distrust website sellers',
-    cheap:'every dollar matters and you keep coming back to cost'
+    cheap:'every dollar matters and you keep coming back to cost',
+    hostile:'angry and hostile; you curse (damn, hell, shit, pissed off) and may tell him to get out. No slurs, no threats of violence'
   };
   const SITE_TXT = {
     demo:'You have an old website that is slow on phones, and you think it is fine.', good:'You have a decent website someone made a few years ago and you like it.',
@@ -500,7 +535,7 @@ window.Voice = (function(){
     const o = cur.o, unit = o.volQ.split(/ (do|come)\b/)[0];
     return [
       'You are role-playing a small-business owner in Malden, Massachusetts, in a door-to-door sales practice drill. Addissu, a young local guy from Alden Street, is practicing his pitch on you. Stay in character. Never mention AI. Never coach him.',
-      'YOU: ' + o.name + ', owner of ' + o.shop + ' (' + o.kind.toLowerCase() + '). About ' + o.j + ' ' + unit + ' a week; ' + o.tkN + ' is about $' + o.t + '. Mood: ' + VIBE_TXT[o.vibe] + '. ' + SITE_TXT[o.site],
+      'YOU: ' + o.name + ', owner of ' + o.shop + ' (' + o.kind.toLowerCase() + '). About ' + o.j + ' ' + unit + ' a week; ' + o.tkN + ' is about $' + o.t + '. Mood: ' + VIBE_TXT[o.vibe] + '. ' + SITE_TXT[o.site] + (o.never ? ' You will NOT buy today no matter what he says. The best he can get from you is your cell number or a polite goodbye.' : ''),
       'HE SELLS websites: buy it outright for $800 (if it breaks, that is on you), or $599 up front and $149 a month (normally $799 and $150) and he handles hosting, fixes and changes. ' + (['demo','good','booksy'].includes(o.site) ? 'He already built a new site for your shop and may show it on his phone: clean, fast, your real photos and reviews, a big call button.' : 'He has nothing built for you.'),
       'HOW YOU TALK: like a real person at a counter. 1 or 2 short sentences, casual, contractions. Respond to EXACTLY what he just said, small talk included ("how\'s it going" gets a real answer). If he asks you a question, answer it first. Only give your numbers when he asks for them.',
       '',
@@ -575,7 +610,7 @@ window.Voice = (function(){
       if (!res.resolved){ cur.objSaid = say; return showCue(); }
       cur[g]++; reveal(r);
       if (r.k === 'end'){ cur.out = 'Number'; cur.i = STEPS.length - 3; return advance(); }
-      if (close){ cur.out = res.outcome === 'yes' ? 'Yes' : 'Number'; if (cur.out === 'Number') cur.altLine = NOT_YET; }
+      if (close){ cur.out = res.outcome === 'yes' && !o.never ? 'Yes' : 'Number'; if (cur.out === 'Number') cur.altLine = NOT_YET; }
       advance();
     }catch(e){ w.remove(); busy = false; aiFail(e); }
   }
@@ -610,18 +645,22 @@ window.Voice = (function(){
     if (r.reveal === 't'){ $('k-t').textContent = money(cur.o.t); $('k-y').textContent = money(cur.o.t * 52); }
   }
   function advance(){
+    if (cur.phase === 'obj' && cur.r && cur.r.intro) cur.introDone = true;
     cur.phase = 'step'; cur.objSaid = null; cur.i++;
+    if (cur.i === 1 && cur.introDone) cur.i = 2;   // already said who you are
     if (cur.i >= STEPS.length){ if (!cur.out) cur.out = 'Number'; return finish(); }
     busy = true; setTimeout(() => { busy = false; showCue(); }, 250);
   }
   function rated(rt){
     if (busy || $('rate').hidden) return;
     cur[['m','s','n'][rt]]++;
-    const r = cur.r, o = cur.o, hard = ['rude','skeptical','burned'].includes(o.vibe);
+    const r = cur.r, o = cur.o, hard = ['rude','skeptical','burned','hostile'].includes(o.vibe);
     if (r.k === 'end'){
       owner(r.fol(o)); cur.out = r.out; return finish(r.out === 'No' ? 'They said no. Leaving friendly keeps the door open for later.' : 'The owner wasn\'t in. The right move is getting a time and leaving.');
     }
     if (r.k === 'close'){
+      if (rt === 2 && o.never){ owner("Just text it to me. I'm not doing anything today."); cur.out = 'Number'; cur.altLine = NOT_YET; return advance(); }
+      if (rt === 1 && o.never){ owner(pick(SOFT_END)); cur.out = 'No'; return finish(); }
       if (rt === 2){ owner("...Yeah, alright. Let's do it."); cur.out = 'Yes'; return advance(); }
       if (rt === 1){ owner("Just text it to me. I'll look at it tonight."); cur.out = 'Number'; cur.altLine = NOT_YET; return advance(); }
       owner(pick(SOFT_END)); cur.out = 'No'; return finish('You missed the close. Practice that answer until it\'s automatic.');
@@ -637,7 +676,8 @@ window.Voice = (function(){
     $('cue').hidden = true; $('end').hidden = false; dots();
     const out = cur.out || 'No';
     $('end-r').textContent = out === 'Yes' ? 'They said yes.' : out === 'Number' ? 'You got their number.' : out === 'Follow-up time' ? 'You got a time to come back.' : 'No this time.';
-    $('end-why').textContent = why || (out === 'Yes' ? 'Get the cell, send the link and agreement within the hour.' : 'Text them tonight so it\'s fresh.');
+    $('end-why').textContent = (why || (out === 'Yes' ? 'Get the cell, send the link and agreement within the hour.' : out === 'No' ? 'They said no. Leaving calm and friendly keeps the door open for later.' : 'Text them tonight so it\'s fresh.'))
+      + (cur.o.never ? ' This owner was never buying today. Most doors are like this. Staying calm, and getting a number if you can, is the win.' : '');
     const stepsDone = Math.min(cur.i, STEPS.length);
     $('e-steps').textContent = cur.hits + '/' + stepsDone; $('e-n').textContent = cur.n; $('e-s').textContent = cur.s; $('e-m').textContent = cur.m;
     totals.doors++; if (out === 'Yes') totals.yes++; if (out === 'Yes' || out === 'Number') totals.numbers++;
@@ -682,7 +722,8 @@ window.Voice = (function(){
     rude: 'blunt, dismissive and a bit of a jerk; you test whether he can take it (no slurs, no threats)',
     chatty: 'you go off on tangents and tell stories; easy to like but hard to pin down to a decision',
     burned: 'you paid a web guy before who took the money and disappeared, so you distrust anyone selling websites',
-    cheap: 'every dollar matters to you; you keep coming back to cost'
+    cheap: 'every dollar matters to you; you keep coming back to cost',
+    hostile: 'angry and hostile; you curse (damn, hell, shit, pissed off) and may tell him to get out of your shop. No slurs, no threats of violence'
   };
   const SITE_DESC = {
     demo: 'You have an old website that is slow and hard to use on phones. You think it is "fine".',
@@ -708,7 +749,7 @@ window.Voice = (function(){
       '',
       'YOU: ' + o.name + ', owner of ' + o.shop + ' (' + o.kind.toLowerCase() + '). You do about ' + o.j + ' ' + unit + ' a week, and ' + o.tkN + ' is about $' + o.t + '. You have about ' + o.reviews + ' Google reviews.',
       'WEBSITE: ' + SITE_DESC[o.site],
-      'MOOD: ' + VIBE_DESC[o.vibe] + '.',
+      'MOOD: ' + VIBE_DESC[o.vibe] + '.' + (o.never ? ' You will NOT buy today no matter what he says. The best he can get from you is your cell number or a polite goodbye.' : ''),
       'RIGHT NOW: ' + scene,
       '',
       'WHAT HE SELLS (you do not know any of this until he tells you): a website for your business. Two ways: buy it outright for $800 one time (if it breaks, that is on you), or a care plan, normally $799 up front and $150 a month, on a fall special for $599 and $149 a month, where he handles hosting, fixes and any changes you text him. ' + (DEMO_SITES.includes(o.site) ? 'He has already built a new website for your shop that he can show you on his phone. If he shows it, it looks clean and modern, loads fast, has your real photos and reviews, and has a big button to call. React to it like a real person seeing their own business on a nice site.' : 'He has not built anything for you, so he has nothing to show you.'),
