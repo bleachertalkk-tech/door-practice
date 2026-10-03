@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Malden Center Route</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+:root{--bg:#eef0ec;--card:#fbfcfa;--ink:#1b2420;--muted:#5d6a63;--line:#d3d9d3;--accent:#1f6f54;--soft:#dcebe3;--warn:#a86a08;--warn-soft:#f6ead2;--done:#9aa59f;
+ --display:"Bricolage Grotesque",system-ui,sans-serif;--body:"IBM Plex Sans",system-ui,sans-serif;--mono:"IBM Plex Mono",ui-monospace,monospace}
+@media (prefers-color-scheme:dark){:root{--bg:#121815;--card:#1a221e;--ink:#e6ece8;--muted:#97a59d;--line:#2e3a34;--accent:#5cc49c;--soft:#1f3a2f;--warn:#e0a640;--warn-soft:#3a2f1a;--done:#55615b;color-scheme:dark}}
+*{box-sizing:border-box}[hidden]{display:none!important}
+body{margin:0;background:var(--bg);color:var(--ink);font:400 16px/1.45 var(--body)}
+header{padding:14px 16px 8px;display:grid;gap:4px}
+h1{font:700 1.5rem/1.1 var(--display);margin:0}
+.sub{color:var(--muted);font-size:.9rem}
+#map{height:52vh;min-height:300px;border-block:1px solid var(--line)}
+.wrap{padding:12px 16px 40px;display:grid;gap:12px;max-width:720px;margin:0 auto}
+.legs{display:flex;flex-wrap:wrap;gap:8px}
+.btn{display:inline-flex;align-items:center;min-height:44px;padding:8px 14px;border-radius:10px;background:var(--accent);color:var(--card);font:600 .95rem var(--body);text-decoration:none;border:0;cursor:pointer}
+.btn.ghost{background:transparent;color:var(--ink);border:1px solid var(--line)}
+.prog{font:500 .95rem var(--mono);font-variant-numeric:tabular-nums}
+ol{list-style:none;margin:0;padding:0;display:grid;gap:10px}
+li.stop{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 14px;display:grid;gap:6px}
+li.stop.done{opacity:.55}
+.when{font:600 .9rem var(--mono);color:var(--accent)}
+.row{display:flex;gap:10px;align-items:flex-start}
+.num{flex:none;width:30px;height:30px;border-radius:50%;background:var(--accent);color:var(--card);font:600 .9rem/30px var(--mono);text-align:center}
+li.done .num{background:var(--done)}
+.nm{font:600 1.05rem/1.25 var(--body)}
+.ad{color:var(--muted);font-size:.88rem}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{font-size:.78rem;padding:2px 8px;border-radius:999px;background:var(--soft)}
+.chip.no{background:var(--warn-soft)}
+.prob{font-size:.92rem}
+.acts{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.acts label{display:flex;gap:6px;align-items:center;font-size:.92rem;cursor:pointer;min-height:44px}
+.acts input{width:20px;height:20px;accent-color:var(--accent)}
+textarea{width:100%;font:400 .95rem var(--body);border:1px solid var(--line);border-radius:10px;padding:8px;background:var(--bg);color:var(--ink);min-height:40px}
+.pin{background:var(--accent);color:#fff;border:2px solid #fff;border-radius:50%;width:28px;height:28px;font:600 13px/24px var(--mono);text-align:center;box-shadow:0 1px 4px rgba(0,0,0,.4)}
+.pin.done{background:#8a948f}.pin.off{background:#c9cfca;color:#555}.pin.home{background:#b23a2e;font-size:11px}
+.leaflet-container{font:inherit}
+</style></head><body>
+<header>
+  <h1>Malden Center Route</h1>
+  <div class="sub" id="sub"></div>
+  <div class="legs" role="tablist"><button class="btn" id="m-today" role="tab">Open tonight (6)</button><button class="btn ghost" id="m-all" role="tab">Ranked list (Monday)</button></div>
+</header>
+<div id="map" role="region" aria-label="Map of the 20 stops"></div>
+<div class="wrap">
+  <div class="prog" id="prog"></div>
+  <div><div class="sub" style="margin-bottom:6px">Open a leg in Google Maps for walking directions:</div><div class="legs" id="legs"></div></div>
+  <ol id="list"></ol>
+  <button class="btn ghost" id="reset">Clear all check marks</button>
+</div>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const HOME = {n:'Malden Center', a:'Malden Center Station, Malden, MA 02148', lat:42.4266, lng:-71.0743};
+const S = [{"n": "B2 Cafe", "t": "Bakery", "a": "147 Pleasant St, Malden, MA 02148", "ph": "(781) 605-0777", "lat": 42.427239, "lng": -71.0710816, "rev": 184, "demo": false, "p": "No website", "h": "8 AM to 7 PM", "url": null, "rank": 1}, {"n": "Malden Metro Insurance Co.", "t": "Insurance agency", "a": "126-150 Pleasant St, Malden, MA 02148", "ph": "(339) 236-8114", "lat": 42.426832, "lng": -71.0708329, "rev": 9, "demo": false, "p": "No website", "h": "7 AM to 8 PM", "url": null, "rank": 2}, {"n": "Wireless World Malden", "t": "Cell phone store", "a": "420 Main St, Malden, MA 02148", "ph": "(781) 397-2200", "lat": 42.4267416, "lng": -71.0672591, "rev": 229, "demo": false, "p": "No website", "h": "9 AM to 7 PM", "url": null, "rank": 3}, {"n": "Eastern Dry Cleaners", "t": "Dry cleaner", "a": "203 Centre St, Malden, MA 02148", "ph": "(781) 322-0838", "lat": 42.4250511, "lng": -71.0674226, "rev": 16, "demo": false, "p": "No website", "h": "7 AM to 7 PM", "url": null, "rank": 4}, {"n": "Royal Photo Studio", "t": "Wedding photographer", "a": "115 Ferry St, Malden, MA 02148", "ph": "(857) 222-5189", "lat": 42.4246158, "lng": -71.0648942, "rev": 26, "demo": false, "p": "No website", "h": "9 AM to 8 PM", "url": null, "rank": 5}, {"n": "Wash n Web Laundromat", "t": "Laundromat", "a": "190 Commercial St A, Malden, MA 02148", "ph": "(781) 321-1277", "lat": 42.4214405, "lng": -71.0746139, "rev": 135, "demo": false, "p": "No website", "h": "6:30 AM to 11 PM", "url": null, "rank": 6}, {"n": "autos bazaar corp", "t": "Used car dealer", "a": "17 Charles St, Malden, MA 02148", "ph": "(781) 786-2922", "lat": 42.424168, "lng": -71.0685765, "rev": 243, "demo": false, "p": "Site is down (503) \u00b7 \"Coming soon\" page \u00b7 Not built for phones \u00b7 Last updated 2003 \u00b7 No tap-to-call", "h": "9 AM to 4 PM", "url": null, "rank": 7}, {"n": "Matthews Insurance Agency", "t": "Insurance agency", "a": "169 Pleasant St, Malden, MA 02148", "ph": "(781) 322-8766", "lat": 42.4272819, "lng": -71.0717425, "rev": 10, "demo": false, "p": "Site is down (404) \u00b7 \"Coming soon\" page \u00b7 Cheap Wix.com site \u00b7 No tap-to-call \u00b7 Almost no text", "h": "Closed", "url": null, "rank": 8}, {"n": "Sergio's Auto Repair", "t": "Auto repair shop", "a": "189 Highland Ave, Malden, MA 02148", "ph": "(781) 480-3238", "lat": 42.4206262, "lng": -71.0796531, "rev": 117, "demo": false, "p": "No website", "h": "8 AM to 3 PM", "url": null, "rank": 9}, {"n": "Paul's Foreign Auto Repair", "t": "Auto repair shop", "a": "149 Ferry St, Malden, MA 02148", "ph": "(781) 397-9020", "lat": 42.4240443, "lng": -71.0647857, "rev": 111, "demo": false, "p": "No website", "h": "Closed", "url": null, "rank": 10}, {"n": "Malden Auto Sales", "t": "Used car dealer", "a": "147 Ferry St, Malden, MA 02148", "ph": "(781) 423-8190", "lat": 42.424016, "lng": -71.064681, "rev": 381, "demo": false, "p": "Site is down (403)", "h": "10 AM to 4 PM", "url": null, "rank": 11}, {"n": "JUNIOR AUTO BODY", "t": "Auto body shop", "a": "9 Whitman St, Malden, MA 02148", "ph": "(617) 767-2912", "lat": 42.4226197, "lng": -71.0773433, "rev": 48, "demo": false, "p": "No website", "h": "Closed", "url": null, "rank": 12}, {"n": "Commercial Auto Body Inc", "t": "Auto body shop", "a": "15 Madison St, Malden, MA 02148", "ph": "(781) 324-7185", "lat": 42.4230752, "lng": -71.0680095, "rev": 37, "demo": false, "p": "No website", "h": "Check hours", "url": null, "rank": 13}, {"n": "Joanna's Tailoring & Dry Cleaning too", "t": "Clothing alteration service", "a": "248 Highland Ave, Malden, MA 02148", "ph": "(781) 333-3688", "lat": 42.4218931, "lng": -71.0803989, "rev": 29, "demo": false, "p": "No website", "h": "9 AM to 2 PM", "url": null, "rank": 14}, {"n": "Flores Auto Repair", "t": "Auto repair shop", "a": "149 Ferry St, Malden, MA 02148", "ph": "(781) 397-9020", "lat": 42.4240402, "lng": -71.0647922, "rev": 30, "demo": false, "p": "No website", "h": "8 AM to 1 PM", "url": null, "rank": 15}, {"n": "TaxPro House Inc", "t": "Accountant", "a": "119 Ferry St, Malden, MA 02148", "ph": "(617) 649-6700", "lat": 42.4245824, "lng": -71.0649587, "rev": 25, "demo": false, "p": "Site is down (ERR)", "h": "Closed", "url": null, "rank": 16}, {"n": "FF Motorsports Corp", "t": "Auto repair shop", "a": "17 Charles St, Malden, MA 02148", "ph": "(781) 420-2592", "lat": 42.424115, "lng": -71.0685165, "rev": 10, "demo": false, "p": "No website", "h": "8 AM to 4 PM", "url": null, "rank": 17}, {"n": "AC Realty", "t": "Real estate agent", "a": "40 Eastern Ave, Malden, MA 02148", "ph": "(781) 591-2256", "lat": 42.4238252, "lng": -71.0664112, "rev": 9, "demo": false, "p": "No website", "h": "Closed", "url": null, "rank": 18}, {"n": "Claude Zephyr, Erius Monpremier", "t": "Real estate agent", "a": "40 Eastern Ave Unit 221, Malden, MA 02148", "ph": "(978) 390-2306", "lat": 42.4238123, "lng": -71.0662954, "rev": 8, "demo": false, "p": "No website", "h": "Closed", "url": null, "rank": 19}, {"n": "Orndorff Family Insurance", "t": "Insurance agency", "a": "90 Eastern Ave, Malden, MA 02148", "ph": "(508) 419-9788", "lat": 42.4244644, "lng": -71.0650337, "rev": 9, "demo": false, "p": "No website", "h": "Closed", "url": null, "rank": 20}, {"n": "Linimberg Photography + Films", "t": "Photographer", "a": "65 Clinton St 3rd Floor, Malden, MA 02148", "ph": "(617) 294-7775", "lat": 42.4335459, "lng": -71.0709941, "rev": 325, "demo": false, "p": "Cheap Wix.com site \u00b7 Almost no text", "h": "11 AM to 3 PM", "url": null, "rank": 21}, {"n": "American Education and Translation Services", "t": "Translation service", "a": "6 Pleasant St #419, Malden, MA 02148", "ph": "(781) 605-1970", "lat": 42.4262961, "lng": -71.0676757, "rev": 254, "demo": false, "p": "Last updated 2009 \u00b7 No tap-to-call", "h": "Closed", "url": null, "rank": 22}, {"n": "T&J Service and collision Inc.", "t": "Car repair and maintenance service", "a": "30 Charles St, Malden, MA 02148", "ph": "(781) 322-4343", "lat": 42.4236709, "lng": -71.0686764, "rev": 108, "demo": false, "p": "Cheap Wix.com site \u00b7 No tap-to-call", "h": "8 AM to 3 PM", "url": null, "rank": 23}, {"n": "Peroni's Jewelry", "t": "Jewelry store", "a": "22 Eastern Ave, Malden, MA 02148", "ph": "(781) 321-0006", "lat": 42.4236439, "lng": -71.0667828, "rev": 235, "demo": false, "p": "Cheap Wix.com site \u00b7 No tap-to-call", "h": "10 AM to 4 PM", "url": null, "rank": 24}];
+const TODAY = [[0, ""], [1, ""], [2, ""], [3, ""], [4, ""], [5, ""]];
+const store = {get(k,d){try{const v=localStorage.getItem(k);return v?JSON.parse(v):d}catch(e){return d}}, set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
+let done = store.get('center.done', {}), notes = store.get('center.notes', {});
+const enc = s => encodeURIComponent(s);
+const gdir = (from, to, via) => 'https://www.google.com/maps/dir/?api=1&travelmode=walking&origin=' + enc(from) + '&destination=' + enc(to) + (via && via.length ? '&waypoints=' + enc(via.join('|')) : '');
+
+const map = L.map('map', {scrollWheelZoom:false});
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:19, attribution:'&copy; OpenStreetMap contributors'}).addTo(map);
+let mode = store.get('center.mode', 'today');
+const SUBS = {today:'Open right now near Malden Center and need a website, in walking order from the T station. Wash n Web is open till 11, so it goes last.', all:'Every stop ranked: open tonight first, then the best Monday stops. Ranked by how badly they need a site, how many reviews they have, and how close they are. Chains and big companies are left out.'};
+let line = null, markers = [];
+const icon = (t, cls) => L.divIcon({className:'', html:'<div class="pin ' + cls + '">' + t + '</div>', iconSize:[28,28], iconAnchor:[14,14]});
+L.marker([HOME.lat,HOME.lng], {icon:icon('H','home')}).addTo(map).bindPopup('<b>Start: Malden Center T</b>');
+function seq(){ return mode === 'today' ? TODAY.map(x => ({i:x[0], when:x[1]})) : S.map((s,i) => ({i, when:null})); }
+function esc(t){ return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'); }
+function drawMap(){
+  if (line) line.remove(); markers.forEach(m => m.remove()); markers = [];
+  const q = seq(), pts = [[HOME.lat,HOME.lng]].concat(q.map(x => [S[x.i].lat,S[x.i].lng])).concat[];
+  line = L.polyline(pts, {color:'#1f6f54', weight:3, opacity:.7, dashArray:'6 6'}).addTo(map);
+  q.forEach((x,k) => { const s = S[x.i];
+    markers.push(L.marker([s.lat,s.lng], {icon:icon(k+1, done[x.i]?'done':'')}).addTo(map)
+      .bindPopup('<b>' + (k+1) + '. ' + esc(s.n) + '</b><br>' + esc(s.a) + '<br>Saturday: ' + esc(s.h) + '<br><a href="' + gdir('My Location', s.a) + '" target="_blank" rel="noopener">Walk here</a>')
+      .on('click', () => { const el = document.getElementById('s'+x.i); if (el) el.scrollIntoView({behavior:'smooth', block:'center'}); })); });
+  map.fitBounds(L.latLngBounds(pts), {padding:[24,24]});
+  // Legs of 4 stops so Google Maps on a phone accepts every link.
+  const legs = []; let from = HOME.a;
+  for (let k = 0; k < q.length; k += 4){
+    const grp = q.slice(k, k+4).map(x => S[x.i]);
+    legs.push({label:'Stops ' + (k+1) + '–' + (k+grp.length), url:gdir(from, grp[grp.length-1].a, grp.slice(0,-1).map(s=>s.a))});
+    from = grp[grp.length-1].a;
+  }
+  
+  document.getElementById('legs').innerHTML = legs.map(l => '<a class="btn ghost" target="_blank" rel="noopener" href="' + l.url + '">' + l.label + '</a>').join('');
+}
+function render(){
+  document.getElementById('sub').textContent = SUBS[mode];
+  document.getElementById('m-today').className = 'btn' + (mode === 'today' ? '' : ' ghost');
+  document.getElementById('m-all').className = 'btn' + (mode === 'all' ? '' : ' ghost');
+  const q = seq();
+  document.getElementById('list').innerHTML = q.map((x,k) => { const s = S[x.i], i = x.i; return '<li class="stop' + (done[i]?' done':'') + '" id="s' + i + '">' +
+    '<div class="row"><span class="num">' + (k+1) + '</span><div><div class="nm">' + esc(s.n) + '</div><div class="ad">' + esc(s.a) + (s.ph ? ' · ' + esc(s.ph) : '') + '</div>' +
+    (x.when ? '<div class="when">Get there by ' + x.when + '</div>' : '') + '</div></div>' +
+    '<div class="chips"><span class="chip' + (/Closed/.test(s.h) ? ' no' : '') + '">Sat: ' + esc(s.h) + '</span><span class="chip">' + esc(s.t) + '</span>' + (s.rev ? '<span class="chip">' + s.rev + ' reviews</span>' : '') + (s.demo ? '<span class="chip">Demo built: show it</span>' : '<span class="chip no">No demo: have them pull up their site</span>') + '</div>' +
+    '<div class="prob"><b>' + (mode === 'all' ? '#' + s.rank + ' · ' : '') + 'Problem:</b> ' + esc(s.p) + '</div>' +
+    '<div class="acts"><a class="btn" target="_blank" rel="noopener" href="' + gdir('My Location', s.a) + '">Walk here</a>' +
+    (s.url ? '<a class="btn ghost" target="_blank" rel="noopener" href="' + s.url + '">Open their demo</a>' : '') +
+    '<label for="d' + i + '"><input type="checkbox" id="d' + i + '" data-i="' + i + '"' + (done[i]?' checked':'') + '> Done</label></div>' +
+    '<textarea id="n' + i + '" data-i="' + i + '" placeholder="Who you talked to, what they said, next step" aria-label="Notes for ' + esc(s.n) + '">' + esc(notes[i]||'') + '</textarea></li>'; }).join('');
+  const c = q.filter(x => done[x.i]).length;
+  document.getElementById('prog').textContent = c + ' of ' + q.length + ' doors done';
+  drawMap();
+}
+function setMode(m){ mode = m; store.set('center.mode', m); render(); }
+document.getElementById('m-today').addEventListener('click', () => setMode('today'));
+document.getElementById('m-all').addEventListener('click', () => setMode('all'));
+document.getElementById('list').addEventListener('change', e => { if (e.target.type === 'checkbox'){ done[e.target.dataset.i] = e.target.checked; store.set('center.done', done); render(); } });
+document.getElementById('list').addEventListener('input', e => { if (e.target.tagName === 'TEXTAREA'){ notes[e.target.dataset.i] = e.target.value; store.set('center.notes', notes); } });
+document.getElementById('reset').addEventListener('click', () => { done = {}; store.set('center.done', done); render(); });
+render();
+</script>
+</body></html>
