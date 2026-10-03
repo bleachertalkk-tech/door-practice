@@ -73,7 +73,7 @@ function seq(){ return mode === 'today' ? TODAY.map(x => ({i:x[0], when:x[1]})) 
 function esc(t){ return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'); }
 function drawMap(){
   if (line) line.remove(); markers.forEach(m => m.remove()); markers = [];
-  const q = seq(), pts = [[HOME.lat,HOME.lng]].concat(q.map(x => [S[x.i].lat,S[x.i].lng])).concat[];
+  const q = seq(), pts = [[HOME.lat,HOME.lng]].concat(q.map(x => [S[x.i].lat,S[x.i].lng]));
   line = L.polyline(pts, {color:'#1f6f54', weight:3, opacity:.7, dashArray:'6 6'}).addTo(map);
   q.forEach((x,k) => { const s = S[x.i];
     markers.push(L.marker([s.lat,s.lng], {icon:icon(k+1, done[x.i]?'done':'')}).addTo(map)
